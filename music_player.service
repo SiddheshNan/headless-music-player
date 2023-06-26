@@ -1,0 +1,12 @@
+[Unit]
+Description=My music_player service
+After=multi-user.target
+
+[Service]
+Type=simple
+Restart=always
+WorkingDirectory=/root/headless-music-player/backend/
+ExecStart=/root/headless-music-player/backend/start.sh
+
+[Install]
+WantedBy=multi-user.target
