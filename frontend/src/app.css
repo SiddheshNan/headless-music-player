@@ -43,6 +43,10 @@ body {
   justify-content: center;
   margin-top: 25px;
 }
+.main-heading:hover {
+  cursor: pointer;
+  text-decoration: underline;
+}
 
 .track-art {
   margin: 25px;

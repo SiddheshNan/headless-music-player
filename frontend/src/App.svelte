@@ -38,6 +38,15 @@
       });
   };
 
+  const reloadLists = () => {
+    fetch(`${BASE_URL}/reload_music_list`)
+      .then((response) => response.json())
+      .then((data) => {
+        getMusicListFromServer();
+        getStateFromServer();
+      });
+  };
+
   const playPause = () => {
     isPaused = !isPaused;
 
@@ -86,7 +95,8 @@
 
 <div class="player">
   <div class="songs-list">
-    <h2 style="font-size: 2rem;">
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <h2 style="font-size: 2rem;" class="main-heading" on:click={reloadLists}>
       <Fa icon={faMusic} style="font-size: 1.8rem;" /> Music Player
     </h2>
 
