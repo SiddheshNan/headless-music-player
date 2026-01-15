@@ -19,9 +19,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy backend application
 COPY backend/ .
 
-# Environment variables for audio
+# Environment variables for audio and paths
 ENV PYGAME_HIDE_SUPPORT_PROMPT=1
 ENV SDL_AUDIODRIVER=alsa
+ENV MUSIC_FOLDER=/app/music
 
 # Create music directory mount point
 RUN mkdir -p /app/music
