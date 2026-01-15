@@ -26,12 +26,22 @@ _player_lock = threading.Lock()
 
 
 def init_player():
-    """Initialize the pygame mixer."""
+    """Initialize the pygame mixer with optimized audio settings."""
     global _is_initialized
     if not _is_initialized:
-        mixer.init()
+        # Audio settings optimized for Raspberry Pi
+        # - frequency: 44100 Hz (CD quality)
+        # - size: -16 (signed 16-bit for better quality)
+        # - channels: 1 (mono output)
+        # - buffer: 2048 (larger buffer reduces crackling/distortion)
+        mixer.init(
+            frequency=44100,
+            size=-16,
+            channels=1,
+            buffer=2048
+        )
         _is_initialized = True
-        logger.info("Player initialized")
+        logger.info("Player initialized (44.1kHz, 16-bit, mono, buffer=2048)")
 
 
 def _get_filepath(filename):
