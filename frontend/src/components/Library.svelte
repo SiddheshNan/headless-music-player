@@ -119,7 +119,7 @@
                 src={getCoverUrl(track.filename)} 
                 alt=""
                 class="w-full h-full object-cover"
-                on:error={(e) => e?.target?.src = defaultCover}
+                on:error={(e) => e.target.src = defaultCover}
               />
             {:else}
               <div class="w-full h-full flex items-center justify-center bg-player-hover">
