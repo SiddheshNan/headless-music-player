@@ -62,8 +62,8 @@ def background_tasks():
         time.sleep(1)
 
 
-def main():
-    """Main entry point."""
+def init_application():
+    """Initialize the application (player, library, state)."""
     logger.info("=" * 50)
     logger.info("Headless Music Player Starting")
     logger.info("=" * 50)
@@ -84,12 +84,20 @@ def main():
     bg_thread = threading.Thread(target=background_tasks, daemon=True)
     bg_thread.start()
     
-    # Create and run app
-    app = create_app()
-    
+    logger.info("Application initialized")
+
+
+# Initialize and create app at module level for gunicorn
+init_application()
+app = create_app()
+
+
+def main():
+    """Main entry point for development."""
     logger.info("Server starting on http://0.0.0.0:8000")
     app.run(host='0.0.0.0', port=8000, debug=False, threaded=True)
 
 
 if __name__ == '__main__':
     main()
+

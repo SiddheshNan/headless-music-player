@@ -37,5 +37,8 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/api/status || exit 1
 
-# Run the application
-CMD ["python", "app.py"]
+# Run with gunicorn for production
+# - 1 worker (required for pygame audio state)
+# - 4 threads for handling concurrent requests
+# - 120s timeout for long operations
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "1", "--threads", "4", "--timeout", "120", "app:app"]
