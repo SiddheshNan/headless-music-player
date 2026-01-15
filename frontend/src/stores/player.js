@@ -2,7 +2,8 @@
 import { writable, derived } from 'svelte/store';
 
 // API base URL - empty for same-origin
-const BASE_URL = 'http://127.0.0.1:8000';
+export const IS_PROD_ENV = !(!process.env.NODE_ENV || process.env.NODE_ENV === "development");
+const BASE_URL = IS_PROD_ENV ? '' : 'http://127.0.0.1:8000';
 
 // Create stores
 export const playerState = writable({
