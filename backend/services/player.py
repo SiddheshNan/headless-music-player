@@ -187,6 +187,17 @@ def get_position():
     return int(position)
 
 
+def sync_position():
+    """Sync current playback position to state for persistence.
+    
+    Call this periodically to ensure position is saved accurately.
+    """
+    if not STATE["playback"]["is_paused"] and STATE["playback"]["current_file"]:
+        current_pos = get_position()
+        # Update state directly to avoid triggering another save
+        STATE["playback"]["position_ms"] = current_pos
+
+
 def set_volume(volume):
     """Set volume level (0.0 to 1.0)."""
     volume = max(0.0, min(1.0, volume))

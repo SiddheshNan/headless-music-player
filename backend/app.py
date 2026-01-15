@@ -53,6 +53,9 @@ def background_tasks():
             # Check if track ended
             player.check_track_ended()
             
+            # Sync current position to state before saving
+            player.sync_position()
+            
             # Periodic state save
             save_state()
             
