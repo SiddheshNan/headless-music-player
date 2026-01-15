@@ -23,9 +23,12 @@ COPY backend/ .
 ENV PYGAME_HIDE_SUPPORT_PROMPT=1
 ENV SDL_AUDIODRIVER=alsa
 ENV MUSIC_FOLDER=/app/music
+ENV CONFIG_FOLDER=/app/config
+ENV CACHE_FOLDER=/app/cache
+ENV PLAYLISTS_FOLDER=/app/playlists
 
-# Create music directory mount point
-RUN mkdir -p /app/music
+# Create mount point directories
+RUN mkdir -p /app/music /app/config /app/cache /app/playlists
 
 # Expose the Flask port
 EXPOSE 8000

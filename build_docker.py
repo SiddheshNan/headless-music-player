@@ -16,10 +16,17 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).parent
 FRONTEND_DIR = PROJECT_ROOT / "frontend"
 BACKEND_DIR = PROJECT_ROOT / "backend"
-DATA_DIR = PROJECT_ROOT / "_data"
 DOCKER_IMAGE_NAME = "headless-music-player"
 DOCKER_TAG = "latest"
 CONTAINER_NAME = "music-player"
+
+# Persistent data directories (created alongside the script)
+DATA_DIRS = {
+    "music": PROJECT_ROOT / "music",        # Music files
+    "config": PROJECT_ROOT / "config",      # State/settings persistence
+    "cache": PROJECT_ROOT / "cache",        # Cover art cache
+    "playlists": PROJECT_ROOT / "playlists" # User playlists
+}
 
 
 def run_command(cmd, cwd=None, description="", capture=False):
@@ -46,12 +53,16 @@ def run_command(cmd, cwd=None, description="", capture=False):
     return result
 
 
-def ensure_data_dir():
-    """Create _data directory if it doesn't exist."""
-    DATA_DIR.mkdir(exist_ok=True)
-    abs_path = DATA_DIR.resolve()
-    print(f"\n📂 Data directory: {abs_path}")
-    return abs_path
+def ensure_data_dirs():
+    """Create all persistent data directories if they don't exist."""
+    print("\n📂 Ensuring data directories exist...")
+    paths = {}
+    for name, path in DATA_DIRS.items():
+        path.mkdir(exist_ok=True)
+        abs_path = path.resolve()
+        paths[name] = abs_path
+        print(f"  ✓ {name}: {abs_path}")
+    return paths
 
 
 def build_frontend():
@@ -154,8 +165,8 @@ def cleanup_old_images():
     print("  ✓ Pruned build cache")
 
 
-def deploy_container(data_path):
-    """Deploy the new container."""
+def deploy_container(paths):
+    """Deploy the new container with all volume mounts."""
     print("\n🚀 Deploying new container...")
     
     cmd = [
@@ -165,15 +176,23 @@ def deploy_container(data_path):
         "--device", "/dev/snd",
         "--group-add", "audio",
         "-e", "SDL_AUDIODRIVER=alsa",
-        "-v", f"{data_path}:/app/music",
+        # Volume mounts for persistence
+        "-v", f"{paths['music']}:/app/music",
+        "-v", f"{paths['config']}:/app/config",
+        "-v", f"{paths['cache']}:/app/cache",
+        "-v", f"{paths['playlists']}:/app/playlists",
         "-p", "8000:8000",
         f"{DOCKER_IMAGE_NAME}:{DOCKER_TAG}"
     ]
     
     run_command(cmd, description=f"Starting container: {CONTAINER_NAME}")
     
-    print(f"\n  🎵 Music directory: {data_path}")
-    print(f"  🌐 Access at: http://<raspberry-pi-ip>:8000")
+    print(f"\n  📂 Mounted volumes:")
+    print(f"     🎵 Music:     {paths['music']} → /app/music")
+    print(f"     ⚙️  Config:    {paths['config']} → /app/config")
+    print(f"     🖼️  Cache:     {paths['cache']} → /app/cache")
+    print(f"     📋 Playlists: {paths['playlists']} → /app/playlists")
+    print(f"\n  🌐 Access at: http://<raspberry-pi-ip>:8000")
 
 
 def main():
@@ -181,8 +200,8 @@ def main():
     print("🎵 Headless Music Player - Docker Build Script")
     print("=" * 60)
     
-    # Ensure _data directory exists
-    data_path = ensure_data_dir()
+    # Ensure all data directories exist
+    paths = ensure_data_dirs()
     
     # Step 1: Build frontend
     build_frontend()
@@ -209,11 +228,12 @@ def main():
         cleanup_old_images()
         
         # Deploy new container
-        deploy_container(data_path)
+        deploy_container(paths)
         
         print("\n" + "=" * 60)
         print("✅ Deployment Complete!")
         print("=" * 60)
+        print("\n📝 State (volume, repeat mode, queue) will persist across restarts.")
     else:
         print("\n⏭ Skipping deployment.")
         print(f"\nTo deploy manually:")
@@ -223,7 +243,10 @@ def main():
         print(f"    --device /dev/snd \\")
         print(f"    --group-add audio \\")
         print(f"    -e SDL_AUDIODRIVER=alsa \\")
-        print(f"    -v {data_path}:/app/music \\")
+        print(f"    -v {paths['music']}:/app/music \\")
+        print(f"    -v {paths['config']}:/app/config \\")
+        print(f"    -v {paths['cache']}:/app/cache \\")
+        print(f"    -v {paths['playlists']}:/app/playlists \\")
         print(f"    -p 8000:8000 \\")
         print(f"    {DOCKER_IMAGE_NAME}:{DOCKER_TAG}")
 

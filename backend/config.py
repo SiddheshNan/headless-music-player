@@ -5,12 +5,18 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Base paths
+# Base paths (configurable via environment for Docker)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MUSIC_FOLDER = os.environ.get('MUSIC_FOLDER', os.path.join(BASE_DIR, 'music'))
-PLAYLISTS_FOLDER = os.path.join(BASE_DIR, 'playlists')
-CONFIG_FILE = os.path.join(BASE_DIR, 'config', 'config.json')
-COVERS_CACHE_FOLDER = os.path.join(BASE_DIR, 'cache', 'covers')
+PLAYLISTS_FOLDER = os.environ.get('PLAYLISTS_FOLDER', os.path.join(BASE_DIR, 'playlists'))
+CONFIG_FILE = os.path.join(
+    os.environ.get('CONFIG_FOLDER', os.path.join(BASE_DIR, 'config')),
+    'config.json'
+)
+COVERS_CACHE_FOLDER = os.path.join(
+    os.environ.get('CACHE_FOLDER', os.path.join(BASE_DIR, 'cache')),
+    'covers'
+)
 
 # Supported audio formats
 SUPPORTED_FORMATS = ['.mp3', '.wav', '.ogg', '.flac']
