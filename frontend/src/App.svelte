@@ -1,162 +1,119 @@
 <script>
-  import { onMount } from "svelte";
-  import { random_bg_color, BASE_URL, send_state_value } from "./helpers.js";
-  import Fa from "svelte-fa/src/fa.svelte";
-  import {
-    faStepBackward,
-    faStepForward,
-    faPlayCircle,
-    faPauseCircle,
-    faMusic,
-    faVolumeDown,
-    faVolumeUp,
-  } from "@fortawesome/free-solid-svg-icons";
+  import { onMount } from 'svelte';
+  import { initPlayer, playerState, fetchPlaylists } from './stores/player.js';
+  import NowPlaying from './components/NowPlaying.svelte';
+  import Queue from './components/Queue.svelte';
+  import Library from './components/Library.svelte';
+  import PlaylistModal from './components/PlaylistModal.svelte';
 
-  let music_list = [];
-  let musicName = "";
-  let isPaused = false;
+  // Navigation tabs
+  const tabs = [
+    { id: 'now', label: 'Now Playing', icon: '🎵' },
+    { id: 'library', label: 'Library', icon: '📚' },
+    { id: 'queue', label: 'Queue', icon: '📋' }
+  ];
 
-  let volume = 0;
+  let activeTab = 'now';
+  let showPlaylistModal = false;
+  let isInitialized = false;
 
-  const getMusicListFromServer = () => {
-    fetch(`${BASE_URL}/music_list`)
-      .then((response) => response.json())
-      .then((data) => {
-        music_list = data;
-        console.log("Got music_list from server:", data);
-      });
-  };
-
-  const getStateFromServer = () => {
-    fetch(`${BASE_URL}/state`)
-      .then((response) => response.json())
-      .then((data) => {
-        musicName = data.fileName;
-        isPaused = data.isPaused;
-        volume = data.volume;
-        console.log("Got state from server", data);
-      });
-  };
-
-  const reloadLists = () => {
-    fetch(`${BASE_URL}/reload_music_list`)
-      .then((response) => response.json())
-      .then((data) => {
-        getMusicListFromServer();
-        getStateFromServer();
-      });
-  };
-
-  const playPause = () => {
-    isPaused = !isPaused;
-
-    isPaused
-      ? send_state_value({ pause: true })
-      : send_state_value({ resume: true });
-  };
-  const playSelectedMusic = (name) => {
-    random_bg_color();
-    musicName = name;
-    send_state_value({
-      play: name,
-    });
-    isPaused = false;
-  };
-
-  const onVolumeChange = (event) => {
-    let vol = event.target.value;
-    send_state_value({
-      volume: parseFloat(vol),
-    });
-  };
-
-  const changeTrack = (kind) => {
-    const currentIndex = music_list.indexOf(musicName);
-    if (kind == "next") {
-      if (currentIndex == music_list.length - 1) {
-        playSelectedMusic(music_list[0]);
-      } else {
-        playSelectedMusic(music_list[currentIndex + 1]);
-      }
-    } else {
-      if (currentIndex == 0) {
-        playSelectedMusic(music_list[music_list.length - 1]);
-      } else {
-        playSelectedMusic(music_list[currentIndex - 1]);
-      }
-    }
-  };
-
-  onMount(() => {
-    getMusicListFromServer();
-    getStateFromServer();
+  onMount(async () => {
+    await initPlayer();
+    isInitialized = true;
   });
+
+  function openPlaylists() {
+    fetchPlaylists();
+    showPlaylistModal = true;
+  }
 </script>
 
-<div class="player">
-  <div class="songs-list">
-    <!-- svelte-ignore a11y-click-events-have-key-events -->
-    <h2 style="font-size: 2rem;" class="main-heading" on:click={reloadLists}>
-      <Fa icon={faMusic} style="font-size: 1.8rem;" /> Music Player
-    </h2>
-
-    <ol>
-      {#each music_list as music}
-        <li>
-          <button
-            class="song-list-item"
-            on:click={() => playSelectedMusic(music)}
-            >{music.substring(0, Math.max(0, music.length - 4))}</button
-          >
-        </li>
-      {/each}
-    </ol>
-  </div>
-
-  <div class="details">
-    <!-- <div class="track-art" /> -->
-    <div
-      class="track-name text-center"
-      style="text-align: center;  font-weight: 500;"
+<div class="min-h-screen flex flex-col">
+  <!-- Header -->
+  <header class="flex items-center justify-between px-4 py-3 border-b border-player-border bg-player-card/50 backdrop-blur-lg sticky top-0 z-40">
+    <div class="flex items-center gap-2">
+      <span class="text-2xl">🎵</span>
+      <h1 class="text-lg font-bold hidden sm:block">Music Player</h1>
+    </div>
+    
+    <button 
+      class="btn-control flex items-center gap-2 px-3 py-2 bg-player-hover rounded-lg"
+      on:click={openPlaylists}
     >
-      {musicName.substring(0, Math.max(0, musicName.length - 4))}
-    </div>
-    <!-- <div class="track-artist">Track Artist</div> -->
-  </div>
+      <span>📋</span>
+      <span class="hidden sm:inline text-sm">Playlists</span>
+    </button>
+  </header>
 
-  <!-- Define the section for displaying track buttons -->
-  <div class="buttons">
-    <!-- svelte-ignore a11y-click-events-have-key-events -->
-    <div class="prev-track" on:click={() => changeTrack("prev")}>
-      <Fa icon={faStepBackward} class="fa fa-step-backward fa-2x" size="2x" />
-    </div>
-    <!-- svelte-ignore a11y-click-events-have-key-events -->
-    <div class="playpause-track" on:click={playPause}>
-      {#if isPaused}
-        <Fa icon={faPlayCircle} class="fa fa-play-circle fa-5x" size="5x" />
-      {:else}
-        <Fa icon={faPauseCircle} class="fa fa-pause-circle fa-5x" size="5x" />
-      {/if}
-    </div>
-    <!-- svelte-ignore a11y-click-events-have-key-events -->
-    <div class="next-track" on:click={() => changeTrack("next")}>
-      <Fa icon={faStepForward} class="fa fa-step-backward fa-2x" size="2x" />
-    </div>
-  </div>
+  <!-- Main Content -->
+  <main class="flex-1 overflow-y-auto pb-20">
+    {#if !isInitialized}
+      <!-- Loading state -->
+      <div class="flex items-center justify-center h-64">
+        <div class="text-center">
+          <div class="text-4xl mb-4 animate-pulse">🎵</div>
+          <p class="text-player-text-muted">Loading...</p>
+        </div>
+      </div>
+    {:else}
+      <!-- Desktop: Side by side layout -->
+      <div class="hidden lg:grid lg:grid-cols-2 gap-6 p-6 max-w-6xl mx-auto">
+        <div class="space-y-6">
+          <div class="card p-6">
+            <NowPlaying />
+          </div>
+          <div class="card p-6">
+            <Queue maxItems={5} />
+          </div>
+        </div>
+        <div class="card p-6">
+          <Library />
+        </div>
+      </div>
 
-  <div class="slider_container">
-    <Fa icon={faVolumeDown} class="fa fa-volume-down" size="2.2x" />
+      <!-- Mobile/Tablet: Tabbed layout -->
+      <div class="lg:hidden p-4">
+        {#if activeTab === 'now'}
+          <NowPlaying />
+          <div class="mt-6 card p-4">
+            <Queue maxItems={3} />
+          </div>
+        {:else if activeTab === 'library'}
+          <Library />
+        {:else if activeTab === 'queue'}
+          <div class="card p-4">
+            <h3 class="text-lg font-semibold mb-4">Full Queue</h3>
+            <Queue maxItems={20} />
+          </div>
+        {/if}
+      </div>
+    {/if}
+  </main>
 
-    <input
-      type="range"
-      min="0.00"
-      max="1.00"
-      step="0.01"
-      class="volume_slider"
-      on:change={onVolumeChange}
-      value={volume}
-    />
-
-    <Fa icon={faVolumeUp} class="fa fa-volume-up" size="2.2x" />
-  </div>
+  <!-- Mobile Bottom Navigation -->
+  <nav class="lg:hidden fixed bottom-0 left-0 right-0 bg-player-card/95 backdrop-blur-lg 
+              border-t border-player-border safe-area-bottom z-40">
+    <div class="flex justify-around">
+      {#each tabs as tab}
+        <button 
+          class="flex-1 flex flex-col items-center py-3 px-4 transition-colors
+                 {activeTab === tab.id ? 'text-player-accent' : 'text-player-text-muted'}"
+          on:click={() => activeTab = tab.id}
+        >
+          <span class="text-xl mb-1">{tab.icon}</span>
+          <span class="text-xs font-medium">{tab.label}</span>
+        </button>
+      {/each}
+    </div>
+  </nav>
 </div>
+
+<!-- Playlist Modal -->
+<PlaylistModal bind:isOpen={showPlaylistModal} />
+
+<style>
+  /* Safe area for iOS */
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+</style>

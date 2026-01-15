@@ -1,0 +1,10 @@
+node_modules
+docker-compose.yml
+logs
+*.log
+.venv
+runs
+application_build
+tmp
+music
+cache

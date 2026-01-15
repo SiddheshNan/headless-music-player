@@ -1,1 +1,65 @@
-{"isPaused": true, "fileName": "Brahma Gayatri Mantra.mp3", "volume": 0.36}
+{
+  "playback": {
+    "is_paused": false,
+    "current_file": "Om Brahmane Namah.mp3",
+    "volume": 0.5,
+    "position_ms": 0,
+    "duration_ms": 547030,
+    "current_track": {
+      "filename": "Om Brahmane Namah.mp3",
+      "title": "Shri Brahma Dev Mantra | \u092c\u094d\u0930\u0939\u094d\u092e\u093e \u092e\u0902\u0924\u094d\u0930 \u091c\u093e\u092a | Om Brahmane Namaha",
+      "artist": "Bhakti Ocean",
+      "album": "Shri Brahma Dev Mantra | \u092c\u094d\u0930\u0939\u094d\u092e\u093e \u092e\u0902\u0924\u094d\u0930 \u091c\u093e\u092a | Om Brahmane Namaha",
+      "duration_ms": 547030,
+      "has_cover": true,
+      "cover_path": "D:\\personal\\personal-projects\\headless-music-player\\backend\\cache\\covers\\3c4124c6df818ae55c2561886a43429f.jpg",
+      "_hash": "3c4124c6df818ae55c2561886a43429f"
+    }
+  },
+  "queue": {
+    "tracks": [
+      "Avadhut Chintan Shri Gurudeva Datta.mp3",
+      "Brahma Gayatri Mantra.mp3",
+      "Guruvashtakam.mp3",
+      "Krishna Gayatri Mantra.mp3",
+      "OM BRAHMANE NAMAHA - ( BRAHMA MANTRA ) Powerful Mantra For Knowledge - 1008 Repetitions.mp3",
+      "Om Namah Shivay.mp3",
+      "Om Namah Shivaya Chanting.mp3",
+      "OM NAMO BHAGAVATE VASUDEVAYA.mp3",
+      "Om Namo Bhagvate Vasudevaya.mp3",
+      "OM NAMO NARAYANAYA.mp3",
+      "OM_BRAHMANE_NAMAHA_-_(_BRAHMA_MANTRA_)_Powerful_Mantra_For_Knowledge_-_1008_Repetitions.mp3",
+      "Shree Krishna Mantra.mp3",
+      "Om Brahmane Namah.mp3",
+      "Om-Brahmane-Namaha (Shri-Brahma-Dev-Mantra).mp3",
+      "Srinivasa Govinda.mp3",
+      "Srinivasa Govinda Sri Venkatesa Govinda.mp3"
+    ],
+    "index": 12,
+    "shuffle": false,
+    "repeat_mode": "one",
+    "original_order": [
+      "Avadhut Chintan Shri Gurudeva Datta.mp3",
+      "Brahma Gayatri Mantra.mp3",
+      "Guruvashtakam.mp3",
+      "Krishna Gayatri Mantra.mp3",
+      "OM BRAHMANE NAMAHA - ( BRAHMA MANTRA ) Powerful Mantra For Knowledge - 1008 Repetitions.mp3",
+      "Om Namah Shivay.mp3",
+      "Om Namah Shivaya Chanting.mp3",
+      "OM NAMO BHAGAVATE VASUDEVAYA.mp3",
+      "Om Namo Bhagvate Vasudevaya.mp3",
+      "OM NAMO NARAYANAYA.mp3",
+      "OM_BRAHMANE_NAMAHA_-_(_BRAHMA_MANTRA_)_Powerful_Mantra_For_Knowledge_-_1008_Repetitions.mp3",
+      "Shree Krishna Mantra.mp3",
+      "Om Brahmane Namah.mp3",
+      "Om-Brahmane-Namaha (Shri-Brahma-Dev-Mantra).mp3",
+      "Srinivasa Govinda.mp3",
+      "Srinivasa Govinda Sri Venkatesa Govinda.mp3"
+    ],
+    "upcoming": [
+      "Om-Brahmane-Namaha (Shri-Brahma-Dev-Mantra).mp3",
+      "Srinivasa Govinda.mp3",
+      "Srinivasa Govinda Sri Venkatesa Govinda.mp3"
+    ]
+  }
+}
