@@ -1,0 +1,114 @@
+/* Source for static/css/app.css. Build with: python scripts/build_css.py */
+@import "tailwindcss";
+@source "../../templates";
+@source "../js";
+
+@plugin "./vendor/daisyui.mjs" {
+  themes: false;
+}
+
+@plugin "./vendor/daisyui-theme.mjs" {
+  name: "player-dark";
+  default: true;
+  prefersdark: true;
+  color-scheme: dark;
+  --color-base-100: oklch(17% 0.006 270);
+  --color-base-200: oklch(20.5% 0.007 270);
+  --color-base-300: oklch(27% 0.008 270);
+  --color-base-content: oklch(94% 0.004 270);
+  --color-primary: oklch(78% 0.14 165);
+  --color-primary-content: oklch(20% 0.04 165);
+  --color-secondary: oklch(72% 0.1 250);
+  --color-secondary-content: oklch(18% 0.03 250);
+  --color-accent: oklch(80% 0.12 85);
+  --color-accent-content: oklch(22% 0.04 85);
+  --color-neutral: oklch(30% 0.008 270);
+  --color-neutral-content: oklch(92% 0.004 270);
+  --color-info: oklch(74% 0.12 235);
+  --color-info-content: oklch(20% 0.04 235);
+  --color-success: oklch(76% 0.15 160);
+  --color-success-content: oklch(20% 0.04 160);
+  --color-warning: oklch(82% 0.14 80);
+  --color-warning-content: oklch(22% 0.05 80);
+  --color-error: oklch(68% 0.18 22);
+  --color-error-content: oklch(98% 0.01 22);
+  --radius-selector: 1rem;
+  --radius-field: 0.5rem;
+  --radius-box: 1rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+@plugin "./vendor/daisyui-theme.mjs" {
+  name: "player-light";
+  default: false;
+  prefersdark: false;
+  color-scheme: light;
+  --color-base-100: oklch(99% 0.002 270);
+  --color-base-200: oklch(97% 0.003 270);
+  --color-base-300: oklch(91% 0.005 270);
+  --color-base-content: oklch(22% 0.01 270);
+  --color-primary: oklch(55% 0.13 165);
+  --color-primary-content: oklch(98% 0.01 165);
+  --color-secondary: oklch(52% 0.12 250);
+  --color-secondary-content: oklch(98% 0.01 250);
+  --color-accent: oklch(70% 0.14 75);
+  --color-accent-content: oklch(20% 0.04 75);
+  --color-neutral: oklch(30% 0.01 270);
+  --color-neutral-content: oklch(97% 0.003 270);
+  --color-info: oklch(58% 0.13 235);
+  --color-info-content: oklch(98% 0.01 235);
+  --color-success: oklch(58% 0.14 160);
+  --color-success-content: oklch(98% 0.01 160);
+  --color-warning: oklch(72% 0.15 70);
+  --color-warning-content: oklch(20% 0.04 70);
+  --color-error: oklch(58% 0.2 25);
+  --color-error-content: oklch(98% 0.01 25);
+  --radius-selector: 1rem;
+  --radius-field: 0.5rem;
+  --radius-box: 1rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+@layer components {
+  .track-row {
+    @apply rounded-field transition-colors hover:bg-base-200;
+  }
+  .track-row.is-current {
+    @apply bg-primary/10;
+  }
+  .track-row.is-current .track-title {
+    @apply text-primary;
+  }
+  /* list-row draws a divider between rows; the hover background is enough here */
+  .list .list-row::after {
+    display: none;
+  }
+}
+
+/* Animated equalizer next to the playing track; still while paused. */
+.eq-bar {
+  transform-box: fill-box;
+  transform-origin: bottom;
+  animation: eq 1s ease-in-out infinite;
+}
+.eq-bar:nth-child(2) { animation-delay: -0.4s; }
+.eq-bar:nth-child(3) { animation-delay: -0.7s; }
+.eq-bar:nth-child(4) { animation-delay: -0.2s; }
+body.is-paused .eq-bar { animation-play-state: paused; }
+
+@keyframes eq {
+  0%, 100% { transform: scaleY(0.35); }
+  50% { transform: scaleY(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .eq-bar { animation: none; }
+}

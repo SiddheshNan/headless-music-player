@@ -1,0 +1,17 @@
+services:
+  headless-music-player:
+    build: .
+    image: headless-music-player
+    container_name: music-player
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    devices:
+      - /dev/snd
+    group_add:
+      - audio
+    volumes:
+      # Your music: .mp3, .flac, .ogg and .wav files (subfolders are not scanned).
+      - ./music:/app/music
+      # The saved state (state.json: queue, position, volume) and the cover art cache.
+      - ./data:/app/data

@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.ruff_cache/
+.pytest_cache/
+
+# Runtime data: state.json, cover cache, music (dev) and Docker Compose volumes
+/runtime/
+/music/
+/data/
+
+# Built CSS and the tools that build it (scripts/build_css.py)
+/.tools/
+headless_music_player/static/css/app.css
+headless_music_player/static/css/vendor/
+
+# Editors and OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+.env

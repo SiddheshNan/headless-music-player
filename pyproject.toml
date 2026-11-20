@@ -1,0 +1,44 @@
+[project]
+name = "headless-music-player"
+version = "0.2.0"
+description = "Play music on a headless Raspberry Pi and control it from your browser"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+dependencies = [
+    "flask>=3.0",
+    "gunicorn>=22.0",
+    "mutagen>=1.47",
+    "pygame>=2.5",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.8.0",
+]
+
+[project.scripts]
+headless-music-player = "headless_music_player.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/SiddheshNan/headless-music-player"
+Issues = "https://github.com/SiddheshNan/headless-music-player/issues"
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["headless_music_player*"]
+
+[tool.setuptools.package-data]
+headless_music_player = ["templates/**/*.html", "static/**/*"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+extend-exclude = [".tools"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = ["E501"]

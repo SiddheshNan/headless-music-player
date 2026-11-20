@@ -1,5 +1,0 @@
-Flask
-Flask-Cors
-pygame
-mutagen
-gunicorn

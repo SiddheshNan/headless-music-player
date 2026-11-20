@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "player",
+      "runtimeExecutable": ".venv/bin/python",
+      "runtimeArgs": ["-m", "headless_music_player", "--dev"],
+      "port": 8000
+    },
+    {
+      "name": "player-silent",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["SDL_AUDIODRIVER=dummy", ".venv/bin/python", "-m", "headless_music_player", "--dev"],
+      "port": 8000
+    }
+  ]
+}

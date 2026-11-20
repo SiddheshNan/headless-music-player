@@ -1,0 +1,45 @@
+name: Bug report
+description: Something doesn't work as it should
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Queue …
+        2. Restart the Pi …
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant lines from `docker compose logs` (or the terminal, when running from source).
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Shown at /api/health, or the image tag you run.
+    validations:
+      required: true
+  - type: input
+    id: hardware
+    attributes:
+      label: Hardware and audio output
+      description: e.g. Raspberry Pi 4, 3.5 mm jack / USB DAC / HDMI, Raspberry Pi OS 64-bit
+  - type: dropdown
+    id: install
+    attributes:
+      label: How you run it
+      options: [Docker Compose, docker run, From source]
+    validations:
+      required: true

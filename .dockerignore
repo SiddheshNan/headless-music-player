@@ -1,0 +1,17 @@
+.git
+.github
+.claude
+.venv
+venv
+.tools
+**/__pycache__
+*.egg-info
+.ruff_cache
+runtime
+music
+data
+dist
+docs
+assets
+headless_music_player/static/css/app.css
+headless_music_player/static/css/vendor
