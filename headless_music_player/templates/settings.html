@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% from "macros/icons.html" import icon %}
+{% from "macros/layout.html" import header %}
+
+{% block title %}Settings · Headless Player{% endblock %}
+
+{% block body %}
+{% call header() %}
+  <a href="{{ url_for('views.index') }}" class="btn btn-ghost btn-sm">{{ icon("arrow-left", "size-4") }} Player</a>
+{% endcall %}
+
+<main class="mx-auto max-w-2xl px-4 py-6 lg:py-10">
+  <h1 class="text-xl font-semibold tracking-tight">Settings</h1>
+  <p class="mt-1 text-sm text-base-content/60">Changes apply right away and are kept across restarts.</p>
+
+  {# ---------- Sound ---------- #}
+  <section class="mt-8" aria-labelledby="sound-heading">
+    <h2 id="sound-heading" class="mb-3 px-1 text-xs font-semibold uppercase tracking-wider text-base-content/50">Sound</h2>
+    <div class="card border border-base-300 bg-base-200/60">
+      <div class="divide-y divide-base-300">
+        <label class="flex cursor-pointer items-start justify-between gap-6 p-5">
+          <span>
+            <span class="flex items-center gap-2 font-medium">{{ icon("waveform", "size-4 text-primary") }} Volume normalization</span>
+            <span class="mt-1 block text-sm text-base-content/60">
+              Plays every song at about the same loudness, so quiet recordings aren't lost and loud ones don't jump out.
+            </span>
+          </span>
+          <input type="checkbox" id="setting-normalize" class="toggle toggle-primary mt-0.5 shrink-0"
+                 {{ "checked" if settings.normalize }} aria-describedby="normalize-help">
+        </label>
+
+        <fieldset id="target-row" class="p-5 transition-opacity {{ '' if settings.normalize else 'opacity-50' }}" {{ "disabled" if not settings.normalize }}>
+          <legend class="sr-only">Target loudness</legend>
+          <div class="flex flex-wrap items-center justify-between gap-4">
+            <span>
+              <span class="block font-medium">Target loudness</span>
+              <span class="mt-1 block text-sm text-base-content/60">Quiet suits background listening; Loud is closest to how most music is mastered.</span>
+            </span>
+            <div class="join" role="radiogroup">
+              {% for name, lufs in settings.loudness_targets.items() %}
+              <input type="radio" name="loudness_target" value="{{ name }}" aria-label="{{ name|capitalize }}"
+                     class="btn btn-sm join-item" title="{{ lufs|int }} LUFS"
+                     {{ "checked" if settings.loudness_target == name }}>
+              {% endfor %}
+            </div>
+          </div>
+          <p class="mt-3 text-xs text-base-content/45">
+            Songs are only turned up as far as your volume leaves room for, so keep the player's volume below 100% if some songs are very quiet.
+          </p>
+        </fieldset>
+
+        <div class="p-5" id="analysis" aria-live="polite">
+          {% set a = settings.analysis %}
+          <div class="flex items-center justify-between gap-4">
+            <span>
+              <span class="block font-medium">Song analysis</span>
+              <span id="analysis-text" class="mt-1 block text-sm text-base-content/60">
+                {% if a.total == 0 %}No songs yet.
+                {% elif a.analyzed >= a.total %}All {{ a.total }} songs measured.
+                {% else %}Measuring loudness in the background: {{ a.analyzed }} of {{ a.total }} songs.{% endif %}
+              </span>
+            </span>
+            {% set done = a.total and a.analyzed >= a.total %}
+            <span class="shrink-0">
+              <span id="analysis-done" class="text-success {{ '' if done else 'hidden' }}">{{ icon("check", "size-5") }}</span>
+              <span id="analysis-busy" class="loading loading-spinner loading-sm text-primary {{ 'hidden' if done or not a.total }}"></span>
+            </span>
+          </div>
+          <progress id="analysis-progress" class="progress progress-primary mt-3 h-1.5 w-full {{ 'hidden' if not a.total or a.analyzed >= a.total }}"
+                    max="{{ a.total or 1 }}" value="{{ a.analyzed }}"></progress>
+          <p id="normalize-help" class="mt-3 text-xs text-base-content/45">
+            Each song is measured once, when it's added. Until then it plays at your volume as is.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {# ---------- Library ---------- #}
+  <section class="mt-8" aria-labelledby="library-heading">
+    <h2 id="library-heading" class="mb-3 px-1 text-xs font-semibold uppercase tracking-wider text-base-content/50">Library</h2>
+    <div class="card border border-base-300 bg-base-200/60">
+      <div class="divide-y divide-base-300">
+        <div class="flex flex-wrap items-center justify-between gap-4 p-5">
+          <span class="min-w-0">
+            <span class="flex items-center gap-2 font-medium">{{ icon("folder", "size-4 text-base-content/60") }} Music folder</span>
+            <code class="mt-1 block truncate text-xs text-base-content/60" title="{{ settings.library.music_dir }}">{{ settings.library.music_dir }}</code>
+          </span>
+          <span id="library-tracks" class="badge badge-ghost tabular-nums">{{ settings.library.tracks }} songs</span>
+        </div>
+        <div class="flex flex-wrap items-center justify-between gap-4 p-5">
+          <span>
+            <span class="block font-medium">Rescan</span>
+            <span class="mt-1 block text-sm text-base-content/60">Pick up songs copied into the folder directly. Uploads appear on their own.</span>
+          </span>
+          <button type="button" id="rescan" class="btn btn-sm">{{ icon("refresh", "size-4") }} Rescan</button>
+        </div>
+        <div class="flex items-center justify-between gap-4 p-5">
+          <span>
+            <span class="block font-medium">Uploads</span>
+            <span class="mt-1 block text-sm text-base-content/60">MP3, FLAC, OGG and WAV, up to {{ settings.max_upload_mb }} MB per song.</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {# ---------- About ---------- #}
+  <section class="mt-8" aria-labelledby="about-heading">
+    <h2 id="about-heading" class="mb-3 px-1 text-xs font-semibold uppercase tracking-wider text-base-content/50">About</h2>
+    <div class="card border border-base-300 bg-base-200/60">
+      <dl class="divide-y divide-base-300 text-sm">
+        <div class="flex justify-between gap-4 px-5 py-3.5"><dt class="text-base-content/60">Version</dt><dd class="tabular-nums">{{ settings.version }}</dd></div>
+        <div class="flex justify-between gap-4 px-5 py-3.5">
+          <dt class="text-base-content/60">Audio output</dt>
+          <dd id="audio-status" class="text-right">
+            {% if settings.audio.available %}<span class="inline-flex items-center gap-1.5"><span class="status status-success"></span> Ready · mono</span>
+            {% else %}<span class="inline-flex items-center gap-1.5 text-warning"><span class="status status-warning"></span> Unavailable, retrying</span>{% endif %}
+          </dd>
+        </div>
+        <div class="flex justify-between gap-4 px-5 py-3.5">
+          <dt class="shrink-0 text-base-content/60">Data folder</dt>
+          <dd class="min-w-0 truncate"><code class="text-xs" title="{{ settings.data_dir }}">{{ settings.data_dir }}</code></dd>
+        </div>
+      </dl>
+    </div>
+  </section>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/settings.js') }}" defer></script>
+{% endblock %}

@@ -147,12 +147,24 @@
 
     if (!volumeDragging) renderVolume(next.volume);
 
+    renderNormalization(next.normalization, current);
+
     show(el.audioAlert, !next.audio.available);
     el.audioError.textContent = `${next.audio.error || ""} Retrying every few seconds.`;
 
     if (next.queue_version !== queueVersion) refreshQueue(next.queue_version);
     if (next.library_version !== libraryVersion) refreshLibrary(next.library_version);
     else if (track?.id !== prevTrackId) markLibraryCurrent();
+  }
+
+  function renderNormalization(norm, current) {
+    const box = $("np-normalization");
+    show(box, norm.enabled && Boolean(current));
+    const gain = norm.gain_db;
+    $("np-normalization-label").textContent =
+      gain === null ? "Normalizing (measuring this song…)"
+        : gain === 0 ? "Normalized · no change"
+          : `Normalized · ${gain > 0 ? "+" : ""}${gain.toFixed(1)} dB`;
   }
 
   function renderVolume(volume) {

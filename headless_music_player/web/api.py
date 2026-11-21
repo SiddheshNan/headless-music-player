@@ -6,10 +6,11 @@ Errors always look like {"error": "message"} with a 4xx/5xx status.
 from flask import Blueprint, abort, jsonify, request, send_file
 
 from .. import __version__
+from ..config import LOUDNESS_TARGETS
 from ..library.uploads import UploadError, save_upload
 from ..playqueue import REPEAT_MODES
 from . import validate as v
-from .serialize import queue_json, runtime, state_json, track_json
+from .serialize import queue_json, runtime, settings_json, state_json, track_json
 
 api = Blueprint("api", __name__, url_prefix="/api")
 
@@ -108,6 +109,7 @@ def library_rescan():
     rt = runtime()
     result = rt.library.scan()
     rt.engine.library_changed()
+    rt.analyzer.wake()
     return jsonify(
         {
             "version": rt.library.version,
@@ -136,6 +138,7 @@ def library_upload():
         raise v.ApiError(str(e)) from e
     if result.created:
         rt.engine.library_changed()
+        rt.analyzer.wake()
     return jsonify({"track": track_json(result.track), "duplicate": not result.created}), 201 if result.created else 200
 
 
@@ -146,6 +149,24 @@ def cover(name):
         abort(404)
     # Covers are named by a hash of their content, so they never change.
     return send_file(path, max_age=31_536_000)
+
+
+# ============== Settings ==============
+
+
+@api.get("/settings")
+def settings():
+    return jsonify(settings_json())
+
+
+@api.post("/settings")
+def settings_update():
+    """Change settings: {"normalize": bool, "loudness_target": "quiet" | "normal" | "loud"}."""
+    body = v.json_body()
+    normalize = v.boolean(body, "normalize")
+    target = v.choice(body, "loudness_target", tuple(LOUDNESS_TARGETS))
+    runtime().engine.update_settings(normalize, target)
+    return jsonify(settings_json())
 
 
 # ============== Queue ==============

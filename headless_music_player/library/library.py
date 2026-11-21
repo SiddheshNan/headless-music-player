@@ -11,7 +11,7 @@ import logging
 import os
 import re
 import threading
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
 from ..config import SUPPORTED_EXTENSIONS
@@ -34,6 +34,8 @@ class Track:
     cover: str | None  # file name in the covers folder
     size: int
     mtime_ns: int
+    loudness: float | None = None  # integrated LUFS, filled in by the loudness analyzer
+    analyzed: bool = False  # True once measured (loudness stays None for silent or unreadable files)
 
 
 @dataclass(frozen=True)
@@ -80,6 +82,33 @@ class Library:
             return None
         path = self.covers_dir / name
         return path if path.is_file() else None
+
+    def unanalyzed(self) -> list[Track]:
+        return [t for t in self._tracks.values() if not t.analyzed]
+
+    def analysis_progress(self) -> tuple[int, int]:
+        """(analyzed, total)."""
+        tracks = self._tracks
+        return sum(1 for t in tracks.values() if t.analyzed), len(tracks)
+
+    def set_loudness(self, track: Track, loudness: float | None) -> bool:
+        """Store a measurement, unless the file changed (or vanished) while it was measured.
+
+        Doesn't bump `version`: loudness isn't shown in the library list.
+        """
+        with self._scan_lock:
+            current = self._tracks.get(track.id)
+            if current is None or (current.size, current.mtime_ns) != (track.size, track.mtime_ns):
+                return False
+            updated = replace(current, loudness=loudness, analyzed=True)
+            tracks = {**self._tracks, track.id: updated}
+            self._sorted = [updated if t.id == track.id else t for t in self._sorted]
+            self._tracks = tracks
+            return True
+
+    def save_index(self) -> None:
+        with self._scan_lock:
+            self._save_index()
 
     # ---------- indexing ----------
 

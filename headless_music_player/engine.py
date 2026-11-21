@@ -21,8 +21,12 @@ from dataclasses import dataclass
 from .audio import AudioBackend, AudioUnavailableError, BackendError
 from .config import (
     AUDIO_RETRY_S,
+    DEFAULT_LOUDNESS_TARGET,
     DEFAULT_VOLUME,
     ENGINE_TICK_S,
+    LOUDNESS_TARGETS,
+    MAX_BOOST_DB,
+    MAX_CUT_DB,
     POSITION_SAVE_INTERVAL_S,
     RESTART_THRESHOLD_MS,
     SAVE_DEBOUNCE_S,
@@ -61,6 +65,9 @@ class Snapshot:
     queue: tuple[Entry, ...]  # play order
     audio_available: bool
     audio_error: str | None
+    normalize: bool
+    loudness_target: str
+    gain_db: float | None  # normalization gain for the current track; None if off or not measured yet
 
     def position_now(self, now: float) -> int:
         if self.status != "playing" or not self.audio_available:
@@ -92,6 +99,8 @@ class PlayerEngine:
         self._position_ms = 0  # authoritative unless a file is playing in the backend
         self._duration_ms = 0
         self._volume = DEFAULT_VOLUME
+        self._normalize = True
+        self._loudness_target = DEFAULT_LOUDNESS_TARGET
         self._loaded: str | None = None  # entry id whose file is loaded in the backend
 
         self._audio_ok = False
@@ -240,6 +249,13 @@ class PlayerEngine:
     def clear_queue(self) -> None:
         self._call(self._clear_queue)
 
+    def update_settings(self, normalize: bool | None = None, loudness_target: str | None = None) -> None:
+        self._call(self._update_settings, normalize, loudness_target)
+
+    def loudness_measured(self, track_id: str) -> None:
+        """Called by the loudness analyzer; re-levels the current track if it was the one measured."""
+        self._call(self._loudness_measured, track_id)
+
     def library_changed(self) -> None:
         """Call after a rescan, so clients refresh track details shown in the queue."""
         self._call(self._library_changed)
@@ -315,8 +331,20 @@ class PlayerEngine:
 
     def _set_volume(self, volume: float) -> None:
         self._volume = min(1.0, max(0.0, float(volume)))
-        if self._audio_ok:
-            self.backend.set_volume(self._volume)
+        self._apply_volume()
+
+    def _update_settings(self, normalize: bool | None, loudness_target: str | None) -> None:
+        if loudness_target is not None and loudness_target not in LOUDNESS_TARGETS:
+            raise CommandError(f"loudness_target must be one of: {', '.join(LOUDNESS_TARGETS)}.", 400)
+        if normalize is not None:
+            self._normalize = normalize
+        if loudness_target is not None:
+            self._loudness_target = loudness_target
+        self._apply_volume()
+
+    def _loudness_measured(self, track_id: str) -> None:
+        if self._queue.current() and self._queue.current().track_id == track_id:
+            self._apply_volume()
 
     def _set_shuffle(self, enabled: bool | None) -> bool:
         self._queue.set_shuffle(not self._queue.shuffle if enabled is None else enabled)
@@ -435,7 +463,31 @@ class PlayerEngine:
             return  # starts once the device is back
         self.backend.load(path)
         self._loaded = entry.id
+        self._apply_volume()  # this track's normalization gain
         self.backend.play(position_ms)
+
+    def _gain_db(self) -> float | None:
+        """Normalization gain for the current track: target loudness minus its measured loudness."""
+        if not self._normalize:
+            return None
+        current = self._queue.current()
+        track = self.library.get(current.track_id) if current else None
+        if track is None or track.loudness is None:
+            return None
+        gain = LOUDNESS_TARGETS[self._loudness_target] - track.loudness
+        return round(min(MAX_BOOST_DB, max(MAX_CUT_DB, gain)), 1)
+
+    def _apply_volume(self) -> None:
+        """Output volume = the user's volume, scaled by the track's gain.
+
+        The mixer can't amplify past 1.0, so a quiet track is lifted only as far as the
+        user's volume leaves room for.
+        """
+        if not self._audio_ok:
+            return
+        gain = self._gain_db()
+        factor = 10 ** (gain / 20) if gain is not None else 1.0
+        self.backend.set_volume(min(1.0, self._volume * factor))
 
     def _current_position(self) -> int:
         if self._status == "playing" and self._loaded and self._audio_ok:
@@ -484,7 +536,7 @@ class PlayerEngine:
         if self._audio_error:
             logger.info("Audio device is back")
         self._audio_ok, self._audio_error = True, None
-        self.backend.set_volume(self._volume)
+        self._apply_volume()
         return True
 
     # ================= state, snapshots, persistence =================
@@ -521,11 +573,16 @@ class PlayerEngine:
             queue=self._queue_tuple,
             audio_available=self._audio_ok,
             audio_error=self._audio_error,
+            normalize=self._normalize,
+            loudness_target=self._loudness_target,
+            gain_db=self._gain_db(),
         )
 
     def _state_dict(self) -> dict:
         return {
             "volume": self._volume,
+            "normalize": self._normalize,
+            "loudness_target": self._loudness_target,
             "status": self._status,
             "position_ms": self._current_position(),
             "queue": self._queue.to_dict(),
@@ -554,6 +611,10 @@ class PlayerEngine:
         volume = data.get("volume")
         if isinstance(volume, (int, float)) and not isinstance(volume, bool):
             self._volume = min(1.0, max(0.0, float(volume)))
+        if isinstance(data.get("normalize"), bool):
+            self._normalize = data["normalize"]
+        if data.get("loudness_target") in LOUDNESS_TARGETS:
+            self._loudness_target = data["loudness_target"]
         status = data.get("status")
         if status in STATUSES and self._queue.current() is not None:
             self._status = status

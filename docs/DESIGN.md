@@ -14,6 +14,7 @@ browser ──HTTP──> web/ (Flask)        validate input, call the engine, r
                     ├── playqueue.py   PlayQueue: pure queue model (no I/O)
                     ├── audio/         AudioBackend: PygameBackend, FakeBackend for tests
                     ├── library/       Library: folder index, tags, covers (own cache)
+                    │                  + LoudnessAnalyzer: background loudness measurement
                     └── store.py       StateStore: state.json, versioned, atomic
 ```
 
@@ -57,6 +58,19 @@ With `threaded=False` commands run on the caller's thread and `tick()` is called
 Tags are read with mutagen (ID3 frames for MP3/WAV, Vorbis comments for FLAC/OGG). Untagged files named "Artist - Title" are split into both. Embedded cover art is stored in `cache/covers/` named by a hash of the image (shared covers are stored once, and the URLs can be cached forever); covers no longer used are deleted after a scan.
 
 The index is saved to `cache/library.json` with each file's size and modification time. At startup it's loaded first, then a scan re-reads only files that changed. A scan builds a new index and swaps it in, so readers never see a half-built one. **Rescan** runs a scan, then tells the engine so clients refresh.
+
+## Volume normalization
+
+Songs are mastered at very different levels, so the player evens them out the way streaming apps do: every song's loudness is measured once, and its volume is scaled to bring it to a target.
+
+- **Measuring** (`library/loudness.py`): miniaudio decodes the file in 100 ms chunks to mono at 44.1 kHz (mono is what the speaker plays). Each chunk is K-weighted in the frequency domain with numpy (the BS.1770 filter's response applied to the chunk's spectrum, so no SciPy is needed), and the integrated loudness in LUFS is computed from 400 ms blocks with the standard -70 LUFS absolute and -10 LU relative gates. A 997 Hz sine at full scale reads -3.01 LUFS, as the standard specifies. Silent files have no loudness.
+- **Analyzer** (`library/analyzer.py`): a background thread, at lowered CPU priority on Linux, measures every song that hasn't been measured yet, starting with the current and next song in the queue. Results are stored on the `Track` (`loudness`, `analyzed`) and saved with the library index every few songs, so each file is analyzed once. A scan or upload wakes it. A result for a file that changed while it was being measured is discarded.
+- **Applying** (engine): gain = target − measured loudness, limited to +12/−24 dB. The output volume is the user's volume × gain, capped at full scale, since the mixer can't amplify; quiet songs are lifted only as far as the user's volume leaves room for. It's set when a song starts, when the volume or settings change, and when the playing song's measurement arrives. Songs not measured yet play at the user's volume.
+- **Settings**: on by default; the targets are quiet (−19 LUFS), normal (−14) and loud (−11), as in common streaming apps. Both are saved in `state.json`.
+
+## Settings page
+
+`/settings` (`templates/settings.html`, `static/js/settings.js`) shows the normalization toggle and target, the analysis progress (polled every 2 s), the music folder with a rescan button, and the version, audio status and data folder. Each change is saved immediately through `POST /api/settings`.
 
 ## Uploads
 

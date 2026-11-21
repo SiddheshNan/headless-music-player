@@ -16,6 +16,8 @@ Notable changes to Headless Music Player. Versions follow [semantic versioning](
 
 ### Added
 
+- **Volume normalization.** Every song's loudness is measured once in the background (EBU R128 / ITU-R BS.1770, in mono) and its volume is adjusted so songs play at about the same level. On by default, with Quiet, Normal and Loud targets. New dependencies: miniaudio and numpy.
+- **Settings page** (gear icon): normalization toggle and target, loudness analysis progress, music folder and rescan, version and audio status. `GET`/`POST /api/settings`.
 - **Upload songs from the browser.** An Upload button opens a modal: drop songs anywhere on the page or browse, keep adding more, remove any with ✕, then upload them one by one with progress for each. Duplicates are detected, name clashes get a number, and uploaded songs can be queued in one click. `POST /api/library/upload`; size limit `HMP_MAX_UPLOAD_MB` (500 by default).
 - **Play next** in the library, next to Add to queue.
 - Subfolders of the music folder are scanned. Track ids are paths inside the music folder.

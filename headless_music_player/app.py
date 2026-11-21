@@ -11,6 +11,7 @@ from .audio import AudioBackend
 from .config import Settings
 from .engine import PlayerEngine
 from .library import Library
+from .library.analyzer import LoudnessAnalyzer
 from .store import StateStore
 
 logger = logging.getLogger(__name__)
@@ -21,9 +22,25 @@ class Runtime:
     settings: Settings
     library: Library
     engine: PlayerEngine
+    analyzer: LoudnessAnalyzer
+
+    def start(self) -> None:
+        self.engine.start()
+        self.analyzer.start()
 
     def shutdown(self) -> None:
+        self.analyzer.stop()
         self.engine.shutdown()
+
+
+def _upcoming_tracks(engine: PlayerEngine) -> list[str]:
+    """The current and next track: measured before the rest of the library."""
+    snap = engine.snapshot()
+    if snap is None or not snap.queue:
+        return []
+    ids = [e.id for e in snap.queue]
+    index = ids.index(snap.current_entry_id) if snap.current_entry_id in ids else 0
+    return [e.track_id for e in snap.queue[index : index + 2]]
 
 
 def build_runtime(settings: Settings, backend: AudioBackend | None = None, **engine_options) -> Runtime:
@@ -37,7 +54,8 @@ def build_runtime(settings: Settings, backend: AudioBackend | None = None, **eng
 
         backend = PygameBackend()
     engine = PlayerEngine(backend, library, StateStore(settings.state_file), **engine_options)
-    return Runtime(settings=settings, library=library, engine=engine)
+    analyzer = LoudnessAnalyzer(library, priority=lambda: _upcoming_tracks(engine), on_measured=engine.loudness_measured)
+    return Runtime(settings=settings, library=library, engine=engine, analyzer=analyzer)
 
 
 def create_app(settings: Settings | None = None, backend: AudioBackend | None = None, start: bool = True, **engine_options):
@@ -56,7 +74,7 @@ def create_app(settings: Settings | None = None, backend: AudioBackend | None = 
         logger.info(f"Headless Music Player {__version__}: music in {settings.music_dir}, data in {settings.runtime_dir}")
         app.config["MAX_CONTENT_LENGTH"] = settings.max_upload_mb * 1024 * 1024
         rt = build_runtime(settings, backend, **engine_options)
-        rt.engine.start()
+        rt.start()
         app.extensions["player"] = rt
         # Save the position and close the device on a clean shutdown (docker stop sends SIGTERM).
         atexit.register(rt.shutdown)

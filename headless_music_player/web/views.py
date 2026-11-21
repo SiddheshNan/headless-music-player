@@ -3,7 +3,7 @@
 from flask import Blueprint, current_app, render_template
 
 from ..config import SUPPORTED_EXTENSIONS
-from .serialize import queue_json, runtime, state_json, track_json
+from .serialize import queue_json, runtime, settings_json, state_json, track_json
 
 views = Blueprint("views", __name__)
 
@@ -32,6 +32,11 @@ def index():
         extensions=SUPPORTED_EXTENSIONS,
         **_library_context(),
     )
+
+
+@views.get("/settings")
+def settings():
+    return render_template("settings.html", settings=settings_json())
 
 
 @views.get("/partials/queue")

@@ -1,0 +1,14 @@
+{# The top bar shared by every page; the caller fills in the actions on the right. #}
+{% macro header() -%}
+<header class="sticky top-0 z-30 border-b border-base-300/70 bg-base-100/85 backdrop-blur">
+  <div class="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
+    <a href="{{ url_for('views.index') }}" class="flex items-center gap-2.5 font-semibold tracking-tight">
+      <img src="{{ url_for('static', filename='favicon.svg') }}" alt="" class="size-7">
+      <span>Headless Player</span>
+    </a>
+    <div class="flex items-center gap-1">
+      {{ caller() }}
+    </div>
+  </div>
+</header>
+{%- endmacro %}

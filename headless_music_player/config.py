@@ -19,6 +19,13 @@ SAVE_DEBOUNCE_S = 1.0  # changes are written at most this often
 POSITION_SAVE_INTERVAL_S = 5.0  # while playing, the position is written this often
 RESTART_THRESHOLD_MS = 3000  # "previous" past this point restarts the track instead
 
+# Volume normalization: each song's volume is scaled so it plays at the target loudness.
+# The levels match the quiet/normal/loud settings common in streaming apps.
+LOUDNESS_TARGETS = {"quiet": -19.0, "normal": -14.0, "loud": -11.0}
+DEFAULT_LOUDNESS_TARGET = "normal"
+MAX_BOOST_DB = 12.0  # don't lift very quiet recordings (and their noise) further than this
+MAX_CUT_DB = -24.0
+
 
 @dataclass(frozen=True)
 class Settings:

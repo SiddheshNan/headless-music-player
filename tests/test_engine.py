@@ -76,6 +76,24 @@ def test_restored_playback_continues(make_engine, clock):
     assert backend.calls[-1] == "play 20000"
 
 
+@pytest.mark.parametrize("action, expected", [("stop", "stopped"), ("pause", "paused"), (None, "playing")])
+def test_restart_keeps_stopped_paused_or_playing(make_engine, clock, library, action, expected):
+    first = make_engine()
+    first.play_all()
+    first.next()
+    clock.advance(20)
+    if action:
+        getattr(first, action)()
+    first.shutdown()
+
+    backend = FakeBackend(clock)
+    second = make_engine(backend)
+    snap = second.snapshot()
+    assert (snap.status, snap.current_track_id) == (expected, ids(library)[1])
+    assert backend.playing == (expected == "playing")
+    assert snap.position_ms == {"stopped": 0, "paused": 20_000, "playing": 20_000}[expected]
+
+
 def test_next_skips_even_with_repeat_one(engine, library, clock):
     """Bug 2: repeat "one" replays when a track ends, but Next still moves on."""
     order = ids(library)
