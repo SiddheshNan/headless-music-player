@@ -19,6 +19,7 @@
 {%- elif name == "list-music" -%}<path d="M21 15V6"/><path d="M18.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/><path d="M12 12H3"/><path d="M16 6H3"/><path d="M12 18H3"/>
 {%- elif name == "library" -%}<path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/>
 {%- elif name == "equalizer" -%}<path d="M4 20v-6" class="eq-bar"/><path d="M10 20V8" class="eq-bar"/><path d="M16 20v-9" class="eq-bar"/><path d="M22 20V4" class="eq-bar"/>
+{%- elif name == "list-start" -%}<path d="M16 12H3"/><path d="M16 18H3"/><path d="M10 6H3"/><path d="M21 18V8a2 2 0 0 0-2-2h-5"/><path d="m16 8-2-2 2-2"/>
 {%- elif name == "list-plus" -%}<path d="M11 12H3"/><path d="M16 6H3"/><path d="M16 18H3"/><path d="M18 9v6"/><path d="M21 12h-6"/>
 {%- endif -%}
 </svg>
@@ -26,8 +27,8 @@
 
 {# Cover art, or a quiet placeholder when the file has none. #}
 {% macro cover(track, class="size-10") -%}
-{% if track and track.has_cover %}
-<img src="{{ url_for('api.get_cover', filename=track.filename) }}" alt="" loading="lazy" decoding="async" class="{{ class }} rounded-field object-cover bg-base-300 shrink-0">
+{% if track and track.cover_url %}
+<img src="{{ track.cover_url }}" alt="" loading="lazy" decoding="async" class="{{ class }} rounded-field object-cover bg-base-300 shrink-0">
 {% else %}
 <div class="{{ class }} rounded-field bg-base-300 text-base-content/30 grid place-items-center shrink-0">{{ icon("music", "size-1/2") }}</div>
 {% endif %}

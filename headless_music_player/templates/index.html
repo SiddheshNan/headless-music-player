@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% from "macros/icons.html" import icon %}
-{% set pb = state.playback %}
-{% set q = state.queue %}
-{% set track = pb.current_track %}
+{% set current = state.current %}
+{% set track = current.track if current else None %}
+{% set paused = state.status != "playing" %}
 
 {% block title %}{% if track %}{{ track.title }} · {% endif %}Headless Player{% endblock %}
 
@@ -27,61 +27,73 @@
 <main class="mx-auto grid max-w-6xl gap-6 px-4 py-6 lg:grid-cols-[400px_minmax(0,1fr)] lg:gap-8 lg:py-10">
   {# ---------- Now playing ---------- #}
   <section aria-label="Now playing" class="lg:sticky lg:top-24 lg:self-start">
+    <div id="audio-alert" role="alert" class="alert alert-warning alert-soft mb-4 text-sm {{ '' if not state.audio.available else 'hidden' }}">
+      {{ icon("volume-x", "size-5 shrink-0") }}
+      <div>
+        <p class="font-medium">Audio device unavailable</p>
+        <p id="audio-error" class="text-xs opacity-80">{{ state.audio.error or "" }} Retrying every few seconds.</p>
+      </div>
+    </div>
+
     <div class="card border border-base-300 bg-base-200/60">
       <div class="card-body gap-5 p-5 sm:p-6">
         <div class="relative mx-auto w-full max-w-72 lg:max-w-none">
-          <img id="np-cover" alt="" class="aspect-square w-full rounded-box object-cover shadow-lg {{ '' if track and track.has_cover else 'hidden' }}"
-               {% if track and track.has_cover %}src="{{ url_for('api.get_cover', filename=track.filename) }}"{% endif %}>
-          <div id="np-cover-fallback" class="aspect-square w-full place-items-center rounded-box bg-base-300 text-base-content/20 {{ 'hidden' if track and track.has_cover else 'grid' }}">
+          <img id="np-cover" alt="" class="aspect-square w-full rounded-box object-cover shadow-lg {{ '' if track and track.cover_url else 'hidden' }}"
+               {% if track and track.cover_url %}src="{{ track.cover_url }}"{% endif %}>
+          <div id="np-cover-fallback" class="aspect-square w-full place-items-center rounded-box bg-base-300 text-base-content/20 {{ 'hidden' if track and track.cover_url else 'grid' }}">
             {{ icon("music", "size-16") }}
           </div>
         </div>
 
         <div class="min-w-0 text-center lg:text-left">
-          <h1 id="np-title" class="truncate text-lg font-semibold tracking-tight" title="{{ track.title if track else '' }}">{{ track.title if track else "Nothing playing" }}</h1>
-          <p id="np-artist" class="truncate text-sm text-base-content/60">{{ track.artist if track else "Pick a track from the library" }}</p>
+          <h1 id="np-title" class="truncate text-lg font-semibold tracking-tight" title="{{ track.title if track else '' }}">
+            {{ track.title if track else ("Missing file" if current else "Nothing playing") }}
+          </h1>
+          <p id="np-artist" class="truncate text-sm text-base-content/60">
+            {% if track %}{{ track.artist or "Unknown artist" }}{% elif not current %}Pick a track from the library{% endif %}
+          </p>
         </div>
 
         <div>
-          <input id="np-seek" type="range" min="0" max="{{ pb.duration_ms or 0 }}" value="{{ pb.position_ms }}" step="1000"
-                 class="range range-primary range-xs w-full" aria-label="Seek" {{ "disabled" if not track }}>
+          <input id="np-seek" type="range" min="0" max="{{ state.duration_ms or 0 }}" value="{{ state.position_ms }}" step="1000"
+                 class="range range-primary range-xs w-full" aria-label="Seek" {{ "disabled" if not current or state.status == "stopped" }}>
           <div class="mt-1.5 flex justify-between text-xs tabular-nums text-base-content/50">
-            <span id="np-position">{{ pb.position_ms|mmss }}</span>
-            <span id="np-duration">{{ pb.duration_ms|mmss }}</span>
+            <span id="np-position">{{ state.position_ms|mmss }}</span>
+            <span id="np-duration">{{ state.duration_ms|mmss }}</span>
           </div>
         </div>
 
         <div class="flex items-center justify-between">
-          <button type="button" id="btn-shuffle" class="btn btn-ghost btn-circle {{ 'text-primary' if q.shuffle else 'text-base-content/50' }}"
-                  data-action="shuffle" aria-label="Shuffle" aria-pressed="{{ 'true' if q.shuffle else 'false' }}" title="Shuffle">
+          <button type="button" id="btn-shuffle" class="btn btn-ghost btn-circle {{ 'text-primary' if state.shuffle else 'text-base-content/50' }}"
+                  data-action="shuffle" aria-label="Shuffle" aria-pressed="{{ 'true' if state.shuffle else 'false' }}" title="Shuffle">
             {{ icon("shuffle", "size-5") }}
           </button>
           <button type="button" class="btn btn-ghost btn-circle btn-lg" data-action="prev" aria-label="Previous" title="Previous">
             {{ icon("skip-back", "size-6", fill=true) }}
           </button>
           <button type="button" id="btn-toggle" class="btn btn-primary btn-circle size-16 shadow-md" data-action="toggle"
-                  aria-label="{{ 'Play' if pb.is_paused else 'Pause' }}">
-            <span id="icon-play" class="{{ '' if pb.is_paused else 'hidden' }}">{{ icon("play", "size-7 translate-x-px", fill=true) }}</span>
-            <span id="icon-pause" class="{{ 'hidden' if pb.is_paused else '' }}">{{ icon("pause", "size-7", fill=true) }}</span>
+                  aria-label="{{ 'Play' if paused else 'Pause' }}">
+            <span id="icon-play" class="{{ '' if paused else 'hidden' }}">{{ icon("play", "size-7 translate-x-px", fill=true) }}</span>
+            <span id="icon-pause" class="{{ 'hidden' if paused else '' }}">{{ icon("pause", "size-7", fill=true) }}</span>
           </button>
           <button type="button" class="btn btn-ghost btn-circle btn-lg" data-action="next" aria-label="Next" title="Next">
             {{ icon("skip-forward", "size-6", fill=true) }}
           </button>
-          <button type="button" id="btn-repeat" class="btn btn-ghost btn-circle {{ 'text-base-content/50' if q.repeat_mode == 'off' else 'text-primary' }}"
-                  data-action="repeat" data-mode="{{ q.repeat_mode }}" aria-label="Repeat: {{ q.repeat_mode }}" title="Repeat: {{ q.repeat_mode }}">
-            <span id="icon-repeat" class="{{ 'hidden' if q.repeat_mode == 'one' else '' }}">{{ icon("repeat", "size-5") }}</span>
-            <span id="icon-repeat-one" class="{{ '' if q.repeat_mode == 'one' else 'hidden' }}">{{ icon("repeat-1", "size-5") }}</span>
+          <button type="button" id="btn-repeat" class="btn btn-ghost btn-circle {{ 'text-base-content/50' if state.repeat == 'off' else 'text-primary' }}"
+                  data-action="repeat" aria-label="Repeat: {{ state.repeat }}" title="Repeat: {{ state.repeat }}">
+            <span id="icon-repeat" class="{{ 'hidden' if state.repeat == 'one' else '' }}">{{ icon("repeat", "size-5") }}</span>
+            <span id="icon-repeat-one" class="{{ '' if state.repeat == 'one' else 'hidden' }}">{{ icon("repeat-1", "size-5") }}</span>
           </button>
         </div>
 
         <div class="flex items-center gap-3">
           <button type="button" class="btn btn-ghost btn-square btn-sm text-base-content/60" data-action="mute" aria-label="Mute" title="Mute">
-            <span id="icon-volume" class="{{ 'hidden' if pb.volume == 0 else '' }}">{{ icon("volume", "size-4") }}</span>
-            <span id="icon-muted" class="{{ '' if pb.volume == 0 else 'hidden' }}">{{ icon("volume-x", "size-4") }}</span>
+            <span id="icon-volume" class="{{ 'hidden' if state.volume == 0 else '' }}">{{ icon("volume", "size-4") }}</span>
+            <span id="icon-muted" class="{{ '' if state.volume == 0 else 'hidden' }}">{{ icon("volume-x", "size-4") }}</span>
           </button>
-          <input id="np-volume" type="range" min="0" max="100" value="{{ (pb.volume * 100)|round|int }}"
+          <input id="np-volume" type="range" min="0" max="100" value="{{ (state.volume * 100)|round|int }}"
                  class="range range-xs grow text-base-content/60" aria-label="Volume">
-          <span id="np-volume-label" class="w-9 text-right text-xs tabular-nums text-base-content/50">{{ (pb.volume * 100)|round|int }}%</span>
+          <span id="np-volume-label" class="w-9 text-right text-xs tabular-nums text-base-content/50">{{ (state.volume * 100)|round|int }}%</span>
         </div>
       </div>
     </div>
@@ -92,7 +104,7 @@
     <div role="tablist" class="tabs tabs-border mb-4">
       <button type="button" role="tab" class="tab gap-2" data-tab="queue" aria-selected="true">
         {{ icon("list-music", "size-4") }} Queue
-        <span id="queue-count" class="badge badge-sm badge-ghost tabular-nums">{{ queue_entries|length }}</span>
+        <span id="queue-count" class="badge badge-sm badge-ghost tabular-nums">{{ queue.entries|length }}</span>
       </button>
       <button type="button" role="tab" class="tab gap-2" data-tab="library" aria-selected="false">
         {{ icon("library", "size-4") }} Library
@@ -100,11 +112,11 @@
       </button>
     </div>
 
-    <div id="panel-queue" role="tabpanel" data-panel="queue" data-version="{{ q.version }}">
+    <div id="panel-queue" role="tabpanel" data-panel="queue" data-version="{{ queue.version }}">
       {% include "partials/queue.html" %}
     </div>
-    <div id="panel-library" role="tabpanel" data-panel="library" class="hidden">
-      {% with current_file = pb.current_file %}{% include "partials/library.html" %}{% endwith %}
+    <div id="panel-library" role="tabpanel" data-panel="library" data-version="{{ library_version }}" class="hidden">
+      {% with current_track_id = track.id if track else None %}{% include "partials/library.html" %}{% endwith %}
     </div>
   </section>
 </main>

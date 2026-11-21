@@ -20,17 +20,17 @@ While changing templates or `static/js/app.js`, keep `python scripts/build_css.p
 ## Layout
 
 ```
-headless_music_player/   the app (Flask)
-  app.py                 app factory, startup and the background loop
-  config.py              paths and settings (HMP_* environment variables)
-  state.py               the shared state, its lock and the atomic save to state.json
-  services/player.py     pygame mixer playback
-  services/library.py    folder scan, tags and cover art
-  services/queue.py      the global queue: order, shuffle, repeat
-  routes/api.py          JSON API under /api
-  routes/views.py        server-rendered page and partials
-  templates/             Jinja templates (pages, partials, icon macros)
-  static/                app.js, input.css (built to app.css), favicon
+headless_music_player/   the app
+  app.py                 app factory: wires library, store, audio backend and engine to Flask
+  config.py              Settings (HMP_* environment variables) and tuning constants
+  engine.py              PlayerEngine: one thread runs every command and tick; publishes snapshots
+  playqueue.py           PlayQueue: the queue model, no I/O
+  store.py               state.json: versioned, atomic writes, migration
+  audio/                 AudioBackend protocol, pygame backend, fake backend for tests
+  library/               folder scan, tags, cover store, index cache
+  web/                   JSON API, page views, request validation
+  templates/, static/    Jinja templates, app.js, input.css (built to app.css)
+tests/                   pytest; no sound card needed
 scripts/build_css.py     Tailwind standalone CLI + daisyUI
 scripts/build.py         release build
 docs/DESIGN.md           how it works
@@ -41,13 +41,15 @@ docs/DESIGN.md           how it works
 ## Before you open a pull request
 
 ```bash
+pytest
 ruff check .
 python scripts/build_css.py
 ```
 
 - Keep changes focused; one pull request per fix or feature.
 - Match the code around you. Comments explain why, not what, and only where it isn't obvious.
-- Change `STATE` only while holding `state.lock`, and go through `update_playback`/`update_queue` or call `save_state()` after.
+- Only the engine changes playback or the queue. New behavior is an engine command with a test in `tests/test_engine.py` (fake backend, fake clock).
+- Check every request field with the helpers in `web/validate.py`.
 - The UI stays server-rendered: markup lives in templates, and `app.js` only sends actions and swaps in partials. No frontend framework or Node build.
 - Audio output is mono on purpose.
 

@@ -1,35 +1,41 @@
 {% from "macros/icons.html" import icon, cover %}
-<div class="flex items-center justify-between gap-2 px-1 pb-3">
+{% set entries = queue.entries %}
+<div class="flex items-center justify-between gap-2 px-1 pb-3" data-queue-count="{{ entries|length }}">
   <p class="text-sm text-base-content/60">
-    {% if queue_entries %}{{ queue_entries|length }} track{{ "s" if queue_entries|length != 1 }}{% else %}Nothing queued{% endif %}
+    {% if entries %}{{ entries|length }} track{{ "s" if entries|length != 1 }}{% if queue.shuffle %} · shuffled{% endif %}{% else %}Nothing queued{% endif %}
   </p>
-  {% if queue_entries %}
+  {% if entries %}
   <button type="button" class="btn btn-ghost btn-sm text-base-content/70" data-action="clear">
     {{ icon("trash", "size-4") }} Clear
   </button>
   {% endif %}
 </div>
 
-{% if queue_entries %}
-<ul class="list -mx-2" data-queue-count="{{ queue_entries|length }}">
-  {% for entry in queue_entries %}
+{% if entries %}
+<ul class="list -mx-2">
+  {% for entry in entries %}
   {% set t = entry.track %}
-  <li class="list-row track-row group items-center px-2 py-2 {{ 'is-current' if entry.current }}"
-      {% if entry.current %}aria-current="true"{% endif %}>
+  {% set is_current = entry.id == queue.current_entry_id %}
+  <li class="list-row track-row group items-center px-2 py-2 {{ 'is-current' if is_current }}" {% if is_current %}aria-current="true"{% endif %}>
     <span class="w-6 text-center text-xs tabular-nums text-base-content/40">
-      {% if entry.current %}<span class="text-primary">{{ icon("equalizer", "size-4 inline equalizer") }}</span>{% else %}{{ entry.index + 1 }}{% endif %}
+      {% if is_current %}<span class="text-primary">{{ icon("equalizer", "size-4 inline") }}</span>{% else %}{{ loop.index }}{% endif %}
     </span>
-    <button type="button" class="flex min-w-0 items-center gap-3 text-left cursor-pointer" data-action="play" data-filename="{{ t.filename }}"
-            aria-label="Play {{ t.title }}">
+    <button type="button" class="flex min-w-0 items-center gap-3 text-left cursor-pointer" data-action="play-entry" data-entry="{{ entry.id }}"
+            aria-label="Play {{ t.title if t else entry.track_id }}">
       {{ cover(t, "size-10") }}
       <span class="min-w-0">
+        {% if t %}
         <span class="track-title block truncate text-sm font-medium">{{ t.title }}</span>
-        <span class="block truncate text-xs text-base-content/55">{{ t.artist }}</span>
+        <span class="block truncate text-xs text-base-content/55">{{ t.artist or "Unknown artist" }}</span>
+        {% else %}
+        <span class="block truncate text-sm font-medium text-base-content/50 line-through">{{ entry.track_id }}</span>
+        <span class="block truncate text-xs text-error">Missing file, will be skipped</span>
+        {% endif %}
       </span>
     </button>
-    <span class="text-xs tabular-nums text-base-content/45">{{ t.duration_ms|mmss }}</span>
+    <span class="text-xs tabular-nums text-base-content/45">{{ t.duration_ms|mmss if t else "" }}</span>
     <button type="button" class="btn btn-ghost btn-square btn-sm text-base-content/50 hover:text-error sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100"
-            data-action="remove" data-index="{{ entry.index }}" aria-label="Remove {{ t.title }} from queue" title="Remove">
+            data-action="remove" data-entry="{{ entry.id }}" aria-label="Remove from queue" title="Remove">
       {{ icon("x", "size-4") }}
     </button>
   </li>

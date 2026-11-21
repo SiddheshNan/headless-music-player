@@ -1,69 +1,62 @@
-"""Flask app factory and the background loop."""
+"""App factory: wires settings, library, state store, audio backend and engine to Flask."""
 
 import atexit
 import logging
-import threading
-import time
+from dataclasses import dataclass
 
 from flask import Flask
 
-from . import __version__
-from .config import POSITION_SAVE_INTERVAL_S, ensure_directories
-from .routes.api import api
-from .routes.views import views
-from .services import library, player
-from .state import load_state, save_state
+from . import __version__, web
+from .audio import AudioBackend
+from .config import Settings
+from .engine import PlayerEngine
+from .library import Library
+from .store import StateStore
 
 logger = logging.getLogger(__name__)
 
-_started = False
+
+@dataclass
+class Runtime:
+    settings: Settings
+    library: Library
+    engine: PlayerEngine
+
+    def shutdown(self) -> None:
+        self.engine.shutdown()
 
 
-def _background_loop():
-    ticks = 0
-    while True:
-        try:
-            player.check_track_ended()
-            player.sync_position()
-            ticks += 1
-            if ticks % POSITION_SAVE_INTERVAL_S == 0:
-                save_state()
-        except Exception:
-            logger.exception("Background task error")
-        time.sleep(1)
+def build_runtime(settings: Settings, backend: AudioBackend | None = None, **engine_options) -> Runtime:
+    settings.ensure_directories()
+    library = Library(settings.music_dir, settings.cache_dir)
+    library.load_cache()
+    library.scan()
+
+    if backend is None:
+        from .audio.pygame_backend import PygameBackend
+
+        backend = PygameBackend()
+    engine = PlayerEngine(backend, library, StateStore(settings.state_file), **engine_options)
+    return Runtime(settings=settings, library=library, engine=engine)
 
 
-def start_player():
-    """Load state, open the audio device, scan the library and resume playback. Runs once."""
-    global _started
-    if _started:
-        return
-    _started = True
-
-    logger.info(f"Headless Music Player {__version__} starting")
-    ensure_directories()
-    load_state()
-    player.init_player()
-    library.scan_library()
-    player.restore_state()
-
-    threading.Thread(target=_background_loop, name="player-loop", daemon=True).start()
-    # Save the latest position on a clean shutdown (docker stop sends SIGTERM).
-    atexit.register(save_state)
-
-
-def create_app(start=True):
-    """Build the app. With start=False the audio device and library are left alone (for tests and CI)."""
+def create_app(settings: Settings | None = None, backend: AudioBackend | None = None, start: bool = True, **engine_options):
+    """Build the app. With start=False nothing touches the disk or audio (for CI import checks)."""
     logging.basicConfig(
         format="%(asctime)s [%(levelname)s] %(name)s | %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
         level=logging.INFO,
     )
-
     app = Flask(__name__)
-    app.register_blueprint(api)
-    app.register_blueprint(views)
+    app.json.sort_keys = False
+    web.register(app)
 
     if start:
-        start_player()
+        settings = settings or Settings.from_env()
+        logger.info(f"Headless Music Player {__version__}: music in {settings.music_dir}, data in {settings.runtime_dir}")
+        rt = build_runtime(settings, backend, **engine_options)
+        rt.engine.start()
+        app.extensions["player"] = rt
+        # Save the position and close the device on a clean shutdown (docker stop sends SIGTERM).
+        atexit.register(rt.shutdown)
     return app

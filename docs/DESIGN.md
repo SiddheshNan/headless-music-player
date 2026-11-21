@@ -4,84 +4,88 @@ How Headless Music Player works inside. Read the relevant section before changin
 
 ## Overview
 
-One Python process does everything: it owns the sound card through the pygame mixer, keeps the player state in memory, saves it to `state.json`, and serves the web UI and the JSON API with Flask. The browser is a remote control; no audio goes to it.
+One Python process owns the sound card, the player state and the web server. The browser is a remote control; no audio goes to it.
 
 ```
-browser ──HTTP──> Flask (routes/api.py, routes/views.py)
-                    │
-                    ├── services/queue.py   queue order, shuffle, repeat
-                    ├── services/player.py  pygame mixer (load, play, pause, seek, volume)
-                    ├── services/library.py folder scan, tags, cover cache
-                    └── state.py            STATE + lock, atomic save to state.json
-background thread ──> every second: detect track end, update position; every 5 s: save
+browser ──HTTP──> web/ (Flask)        validate input, call the engine, return a snapshot
+                    │  commands (thread-safe calls)        ▲ snapshots (read without locks)
+                    ▼                                       │
+                  engine.py  PlayerEngine: one thread runs every command and tick
+                    ├── playqueue.py   PlayQueue: pure queue model (no I/O)
+                    ├── audio/         AudioBackend: PygameBackend, FakeBackend for tests
+                    ├── library/       Library: folder index, tags, covers (own cache)
+                    └── store.py       StateStore: state.json, versioned, atomic
 ```
 
-There must be exactly one process. Docker runs gunicorn with one worker and four threads; a second worker would open the sound card again and keep its own copy of the state.
+There must be exactly one process. Docker runs gunicorn with one worker; a second worker would open the sound card again and keep its own state.
 
-## Startup
+## Engine
 
-`create_app()` (gunicorn calls `headless_music_player.app:create_app()`) runs `start_player()` once:
+`PlayerEngine` is the only code that changes playback or the queue, and the only code that calls the audio backend. Public methods (`toggle()`, `next()`, `add_to_queue()`, …) put a command on a queue and wait for the engine thread to run it, so commands never overlap and there is nothing to lock. Between commands the thread ticks every 250 ms:
 
-1. `load_state()` reads `state.json`. Only known keys are taken, so fields from older versions or bugs are dropped. A file that can't be parsed is renamed to `state.json.corrupt` and the defaults are used.
-2. `init_player()` opens the mixer: 44.1 kHz, 16-bit, **mono** (one speaker, by design), 2048-sample buffer to avoid crackling on the Pi.
-3. `scan_library()` indexes the music folder.
-4. `restore_state()` sets the saved volume and reloads the current track at the saved position, paused or playing as it was.
-5. The background thread starts, and `atexit` saves the state on a clean shutdown.
+- **End of track:** when the backend reports the file finished, advance (`queue.next(manual=False)`, which honors repeat "one"). At the end of the queue it stops and rewinds, so Play starts over.
+- **Missing sound card:** if the device couldn't be opened (common at boot, before ALSA is ready), retry every 5 s. Commands keep working meanwhile; once the device appears, playback starts where the state says it should.
+- **Saving:** see below.
 
-`create_app(start=False)` skips all of this, for CI and tests without a sound card.
+After each command and tick the engine publishes a frozen `Snapshot` (status, position and when it was taken, current entry, the queue as a tuple, modes, audio availability, and `version`/`queue_version` counters). Web handlers read it without touching engine state. `queue_version` changes only when the queue's entries, order, current entry or modes change; the UI re-renders the queue only then.
 
-## State and persistence
+Rules worth knowing:
 
-`state.STATE` has two sections:
+- **Next** always moves on; repeat "one" only replays when a track ends by itself. **Previous** restarts the track when more than 3 s in.
+- **Play with nothing loaded** (after a restart, a stop, the end of the queue, or a seek while paused) starts the current entry from the remembered position.
+- **Playing a library track** inserts it after the current entry and plays it; the rest of the queue stays. Playing the track that's already current restarts it.
+- **Removing the current entry** plays the one that took its place (or stops at the end).
+- **Unplayable entries** (file gone or unreadable) are skipped.
+- **Seek while paused** just remembers the position; Resume plays from there. Formats that can't seek return an error.
 
-- `playback`: `is_paused`, `current_file`, `volume` (0–1), `position_ms`, `duration_ms`
-- `queue`: `tracks` (filenames, in play order), `index`, `shuffle`, `repeat_mode` (`off`, `all`, `one`), `original_order` (the order before shuffling)
+With `threaded=False` commands run on the caller's thread and `tick()` is called by hand. The tests use that with `FakeBackend` and a fake clock.
 
-Request threads and the background thread share it. Every read-modify-write holds `state.lock`, a re-entrant lock that also covers the mixer calls, so services can call each other while holding it.
+## Queue model
 
-`save_state()` writes JSON to `state.json.tmp`, fsyncs it, renames it over `state.json` and fsyncs the folder. After a power cut the file is either the old or the new version, never half-written. (Before 0.2 the file was rewritten in place every second, and a reboot could leave it empty, which reset the volume to 50% and lost the queue.) A save is skipped when the JSON is unchanged.
+`PlayQueue` holds `Entry(id, track_id)` objects. Entry ids make duplicates possible and keep references stable while the queue changes. It keeps two orders: insertion order, and (while shuffle is on) a shuffled order of entry ids with the current entry first. Turning shuffle off always goes back to insertion order; adding, inserting and removing update both. "Shuffle all" queues the library in its order with a shuffled play order, so unshuffling restores the library order.
 
-User actions save immediately. The position only changes in memory every second and is saved every `POSITION_SAVE_INTERVAL_S` (5) seconds, so a restart resumes within a few seconds of where it stopped without writing to the SD card every second.
+## Audio backend
 
-`/api/state` and the templates work on `snapshot()`, a deep copy, and add derived fields (`current_track`, `upcoming`, `queue.version`) to the copy only.
+`AudioBackend` is a small protocol: `open`, `load`, `play(start_ms)`, `pause`, `resume`, `stop`, `seek`, `set_volume`, `position_ms`, `is_finished`. `open` raises `AudioUnavailableError`; `load` raises `BackendError`.
 
-## Playback position
-
-pygame can't tell where playback is, so `player.py` remembers when playback last started (`_play_start_time`) and from where (`_play_start_position`) and adds the elapsed time. Seeking uses `mixer.music.set_pos`, which depends on the codec (it works for MP3 and OGG; see the pygame docs).
-
-A track has ended when the mixer is no longer busy while the state says it's playing. The background loop then calls `next_track()`, which follows the repeat mode.
-
-## Queue
-
-There is one global queue and no saved playlists. The queue holds each file once. Playing a track from the library jumps to it if it's queued and otherwise replaces the queue with that track. Shuffle reorders `tracks` with the current track first and keeps `original_order` to go back to; adding or removing tracks updates both lists.
+`PygameBackend` opens the mixer at 44.1 kHz, 16-bit, **mono** (one speaker, by design), with a 2048-sample buffer against crackling on the Pi. The position is `mixer.music.get_pos()` (which counts from `play()` and stops while paused) plus an offset for where playback started or was seeked to, so it doesn't drift like a wall clock. `get_busy()` is also False while paused, so the backend tracks pause itself to tell "paused" from "finished".
 
 ## Library
 
-`scan_library()` lists the music folder (not subfolders) for `.mp3`, `.flac`, `.ogg` and `.wav`, reads tags with mutagen and writes embedded cover art to `cache/covers/<md5 of path and mtime>.jpg`. The index is kept in memory and rebuilt at startup and on **Rescan**.
+`Library` walks the music folder, subfolders included (hidden files and folders skipped), for `.mp3`, `.flac`, `.ogg` and `.wav`. A track's id is its path inside the music folder with forward slashes; only ids from the index are turned into paths, so clients can't name arbitrary files.
 
-## Web UI
+Tags are read with mutagen (ID3 frames for MP3/WAV, Vorbis comments for FLAC/OGG). Untagged files named "Artist - Title" are split into both. Embedded cover art is stored in `cache/covers/` named by a hash of the image (shared covers are stored once, and the URLs can be cached forever); covers no longer used are deleted after a scan.
 
-The UI is server-rendered: `routes/views.py` renders `templates/index.html` with the state, the queue and the library. `static/js/app.js` (no framework, no build step) then:
+The index is saved to `cache/library.json` with each file's size and modification time. At startup it's loaded first, then a scan re-reads only files that changed. A scan builds a new index and swaps it in, so readers never see a half-built one. **Rescan** runs a scan, then tells the engine so clients refresh.
 
-- sends every button press to the JSON API and polls `/api/state` every second while the tab is visible, updating the now-playing card in place;
-- reloads `/partials/queue` when `queue.version` (a hash of the queue's tracks, index and shuffle) changes, and `/partials/library` after a rescan;
-- filters the library in the browser while you type.
+## State and persistence
 
-Styles are Tailwind CSS v4 with daisyUI v5, compiled by the Tailwind standalone CLI (`scripts/build_css.py`, pinned versions) from `static/css/input.css`, which also defines the `player-dark` and `player-light` themes. The output `app.css` is gitignored; the Docker image builds it in a separate stage. Icons are inline Lucide SVGs in `templates/macros/icons.html`. Nothing is loaded from the internet, so the UI works on a LAN without access to the outside.
+`state.json` (version 2) holds `volume`, `status`, `position_ms` and the queue (`entries`, `shuffled`, `current`, `repeat`). `StateStore` writes it to a temp file, fsyncs, renames over the old file and fsyncs the folder, so a power cut leaves the old or the new file, never a broken one. Before 0.2 the file was rewritten in place every second, and a reboot could leave it empty, which reset the volume to 50% and lost the queue. An unreadable file is kept as `state.json.corrupt` and the player starts fresh. The 0.1 format is migrated on load.
+
+The engine saves at most once a second after a change, every 5 seconds while playing (for the position), and on shutdown (`atexit`, which `docker stop` triggers). Unchanged state isn't rewritten, which spares SD cards.
+
+## Web
+
+`web/api.py` is the JSON API; `web/validate.py` checks bodies (types, ranges, required fields), so malformed requests get a 400 and never a 500. Engine refusals (`CommandError`) map to 404/409 with a message. Every error body is `{"error": "message"}`. Most action endpoints answer with the new state.
+
+The UI is server-rendered: `web/views.py` renders `index.html` and the `partials/queue.html` and `partials/library.html` fragments. `static/js/app.js` (no framework, no build step) sends actions, renders the returned state, polls `/api/state` every second while the tab is visible, moves the progress bar between polls, and swaps in a partial when `queue_version` or `library_version` changes.
+
+Styles are Tailwind CSS v4 with daisyUI v5, compiled by the standalone CLI (`scripts/build_css.py`, pinned versions) from `static/css/input.css`, which also defines the `player-dark` and `player-light` themes. `app.css` is gitignored; the Docker image builds it. Icons are inline Lucide SVGs. Nothing loads from the internet.
 
 ## Configuration
 
 | Variable | Default | |
 |---|---|---|
-| `HMP_RUNTIME_DIR` | `<repo>/runtime` (`/app/data` in Docker) | `state.json` and `cache/covers/` |
+| `HMP_RUNTIME_DIR` | `<repo>/runtime` (`/app/data` in Docker) | `state.json` and `cache/` |
 | `HMP_MUSIC_DIR` | `$HMP_RUNTIME_DIR/music` (`/app/music` in Docker) | the music folder |
 | `HMP_HOST`, `HMP_PORT` | `0.0.0.0`, `8000` | for `python -m headless_music_player` |
 | `SDL_AUDIODRIVER` | `alsa` in Docker | `dummy` runs without a sound card |
 
+Tuning constants (tick, retry and save intervals, mixer settings) are in `config.py`.
+
 ## Known limitations
 
 - No login. Keep it on a private network ([SECURITY.md](../SECURITY.md)).
-- Subfolders of the music folder are not scanned.
-- The cover cache is never pruned: changed or deleted files leave their old cover behind.
-- The position is estimated from wall-clock time, so it can drift slightly from the audio.
+- Seeking depends on the format's support in SDL_mixer.
+- The library isn't watched; press Rescan after adding music.
 - Docker images are built for `linux/amd64` and `linux/arm64`; 32-bit Raspberry Pi OS isn't supported.

@@ -16,9 +16,10 @@ The audio comes out of the Pi itself (3.5 mm jack, USB DAC or HDMI). Your phone 
 
 ## Features
 
-- One global play queue: play, pause, seek, next and previous, shuffle, repeat (off, all, one)
-- Library from a folder of `.mp3`, `.flac`, `.ogg` and `.wav` files, with tags, cover art and search
+- One global play queue: play, pause, seek, next and previous, play next, shuffle, repeat (off, all, one)
+- Library from a folder of `.mp3`, `.flac`, `.ogg` and `.wav` files (subfolders too), with tags, cover art and search
 - Picks up where it left off after a restart or power cut: queue, track, position and volume
+- Copes with a sound card that shows up late at boot: it waits for it and then starts playing
 - A fast, server-rendered web UI that works on phones and desktops, in light and dark
 - Mono output, for a single speaker
 - One small container; no database, no Node at runtime
@@ -49,6 +50,7 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 python scripts/build_css.py
 python -m headless_music_player --dev
+pytest
 ```
 
 Open http://localhost:8000. Put a few songs in `runtime/music/`; the state is saved in `runtime/state.json`. Run `python scripts/build_css.py --watch` in a second terminal while you change templates. See [CONTRIBUTING.md](CONTRIBUTING.md) for the layout and conventions.

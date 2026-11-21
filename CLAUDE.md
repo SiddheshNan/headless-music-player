@@ -4,31 +4,36 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Headless Music Player: plays music on a Raspberry Pi with no screen. A Flask app owns the sound card through the pygame mixer, keeps the player state in memory (saved to `state.json`) and serves a server-rendered web UI (Jinja + Tailwind/daisyUI) and a JSON API that the UI uses. [docs/DESIGN.md](docs/DESIGN.md) describes startup, state, persistence and known limitations; read the relevant section before changing behavior.
+Headless Music Player: plays music on a Raspberry Pi with no screen. One process: a `PlayerEngine` thread owns the pygame mixer, the queue and the saved state; Flask serves a server-rendered UI (Jinja + Tailwind/daisyUI) and a JSON API that the UI uses. [docs/DESIGN.md](docs/DESIGN.md) describes the engine, queue rules, persistence and limitations; read the relevant section before changing behavior.
 
 ## Commands
 
 ```bash
 pip install -e ".[dev]"
+pytest                                   # no sound card needed (fake backend; pygame tests use SDL's dummy driver)
+ruff check .
 python scripts/build_css.py              # app.css (downloads the Tailwind CLI + daisyUI into .tools/ once)
 python scripts/build_css.py --watch      # while editing templates or app.js
 python -m headless_music_player --dev    # :8000; SDL_AUDIODRIVER=dummy without a sound card
-ruff check .
 ```
 
-There are no tests yet. `create_app(start=False)` builds the app without touching audio, for tests. Release: `scripts/build.py` writes the version into `headless_music_player/__init__.py` and `pyproject.toml` and builds the image; a `vX.Y.Z` tag runs `.github/workflows/release.yml`.
+Release: `scripts/build.py` writes the version into `headless_music_player/__init__.py` and `pyproject.toml` and builds the image; a `vX.Y.Z` tag runs `.github/workflows/release.yml`.
 
 ## Architecture
 
-- `app.py`: `create_app()` registers the blueprints and calls `start_player()` once (load state, open mixer, scan, restore, start the background loop). Gunicorn uses `headless_music_player.app:create_app()`. Exactly one process.
-- `state.py`: `STATE`, the re-entrant `lock`, `save_state()` (atomic: temp file, fsync, rename; skipped when unchanged), `snapshot()`, queue navigation helpers.
-- `services/player.py` (mixer, position estimate), `services/queue.py` (global queue, shuffle, repeat), `services/library.py` (scan, tags, cover cache).
-- `routes/api.py`: JSON API under `/api`; `public_state()` builds the client view from a snapshot. `routes/views.py`: `/`, `/partials/queue`, `/partials/library`.
-- `templates/`: `index.html`, `partials/`, `macros/icons.html` (inline Lucide icons, `cover()` macro). `static/js/app.js` sends actions, polls `/api/state` and swaps partials; no framework.
+- `app.py`: `create_app(settings, backend, start)` builds the `Runtime` (library, engine) and registers `web/`. Gunicorn uses `headless_music_player.app:create_app()`. Exactly one process.
+- `engine.py`: `PlayerEngine`. Public methods are thread-safe and run as commands on the engine thread (`_call`); `_`-prefixed methods run only there. `tick()` detects track ends, retries the audio device, saves. `snapshot()` returns a frozen `Snapshot`. Refusals raise `CommandError(message, status)`.
+- `playqueue.py`: `PlayQueue`, a pure model (entries with ids, insertion and shuffled orders, current entry, repeat).
+- `audio/`: `AudioBackend` protocol, `PygameBackend`, `FakeBackend` (injectable clock).
+- `library/`: `Library` (scan with index cache in `cache/library.json`, track id = path in the music folder, hashed cover files), `metadata.py`.
+- `store.py`: `StateStore` (versioned `state.json`, atomic writes, 0.1 migration). `fsutil.py`: atomic write helpers.
+- `web/`: `api.py` (JSON API), `views.py` (page and partials), `validate.py` (body checks raising `ApiError`), `serialize.py` (shared JSON shapes).
+- `templates/`, `static/js/app.js`: the UI; the script posts actions, polls `/api/state`, swaps partials on `queue_version`/`library_version` changes.
 
 ## Conventions
 
-- Change `STATE` only under `lock`; persist with `update_playback`/`update_queue` or `save_state()`. Never put derived fields into `STATE`.
+- Only the engine changes playback or the queue, and only on its thread. Add behavior as an engine command plus a test in `tests/test_engine.py`.
+- Validate every request field in `web/validate.py` helpers; never let bad input reach the engine as a 500.
 - Mono output (`MIXER_SETTINGS`) is intentional.
-- No Node or frontend framework; new UI goes into templates, with Tailwind/daisyUI classes. Rebuild the CSS after adding classes.
-- There are no saved playlists; there is one global queue.
+- No Node or frontend framework; new UI goes into templates with Tailwind/daisyUI classes. Rebuild the CSS after adding classes.
+- There are no saved playlists; there is one global queue, which may contain duplicates.

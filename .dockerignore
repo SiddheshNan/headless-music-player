@@ -15,3 +15,4 @@ docs
 assets
 headless_music_player/static/css/app.css
 headless_music_player/static/css/vendor
+tests

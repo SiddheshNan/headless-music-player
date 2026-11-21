@@ -1,5 +1,5 @@
 {% from "macros/icons.html" import icon, cover %}
-<div class="flex flex-wrap items-center gap-2 pb-3">
+<div class="flex flex-wrap items-center gap-2 pb-3" data-library-count="{{ library_tracks|length }}">
   <label class="input input-sm grow min-w-40">
     {{ icon("search", "size-4 opacity-50") }}
     <input type="search" id="library-search" placeholder="Search {{ library_tracks|length }} tracks" autocomplete="off">
@@ -11,23 +11,29 @@
 </div>
 
 {% if library_tracks %}
-<ul class="list -mx-2" id="library-list" data-library-count="{{ library_tracks|length }}">
+<ul class="list -mx-2" id="library-list">
   {% for t in library_tracks %}
-  <li class="list-row track-row group items-center px-2 py-2 {{ 'is-current' if t.filename == current_file }}"
-      data-filename="{{ t.filename }}" data-search="{{ (t.title ~ ' ' ~ t.artist ~ ' ' ~ t.album ~ ' ' ~ t.filename)|lower }}">
-    <button type="button" class="flex min-w-0 items-center gap-3 text-left cursor-pointer list-col-grow" data-action="play" data-filename="{{ t.filename }}"
+  <li class="list-row track-row group items-center px-2 py-2 {{ 'is-current' if t.id == current_track_id }}"
+      data-track="{{ t.id }}" data-search="{{ (t.title ~ ' ' ~ (t.artist or '') ~ ' ' ~ (t.album or '') ~ ' ' ~ t.id)|lower }}">
+    <button type="button" class="flex min-w-0 items-center gap-3 text-left cursor-pointer list-col-grow" data-action="play-track" data-track="{{ t.id }}"
             aria-label="Play {{ t.title }}">
       {{ cover(t, "size-10") }}
       <span class="min-w-0">
         <span class="track-title block truncate text-sm font-medium">{{ t.title }}</span>
-        <span class="block truncate text-xs text-base-content/55">{{ t.artist }}{% if t.album and t.album != "Unknown Album" and t.album != t.title %} · {{ t.album }}{% endif %}</span>
+        <span class="block truncate text-xs text-base-content/55">{{ t.artist or "Unknown artist" }}{% if t.album and t.album != t.title %} · {{ t.album }}{% endif %}</span>
       </span>
     </button>
     <span class="text-xs tabular-nums text-base-content/45">{{ t.duration_ms|mmss }}</span>
-    <button type="button" class="btn btn-ghost btn-square btn-sm text-base-content/50 hover:text-primary"
-            data-action="add" data-filename="{{ t.filename }}" aria-label="Add {{ t.title }} to queue" title="Add to queue">
-      {{ icon("list-plus", "size-4") }}
-    </button>
+    <div class="flex">
+      <button type="button" class="btn btn-ghost btn-square btn-sm text-base-content/50 hover:text-primary"
+              data-action="play-next" data-track="{{ t.id }}" aria-label="Play {{ t.title }} next" title="Play next">
+        {{ icon("list-start", "size-4") }}
+      </button>
+      <button type="button" class="btn btn-ghost btn-square btn-sm text-base-content/50 hover:text-primary"
+              data-action="add" data-track="{{ t.id }}" aria-label="Add {{ t.title }} to the end of the queue" title="Add to queue">
+        {{ icon("list-plus", "size-4") }}
+      </button>
+    </div>
   </li>
   {% endfor %}
 </ul>
@@ -36,7 +42,7 @@
 <div class="flex flex-col items-center gap-2 rounded-box border border-dashed border-base-300 px-6 py-14 text-center">
   <span class="text-base-content/30">{{ icon("music", "size-8") }}</span>
   <p class="text-sm text-base-content/70">No music found.</p>
-  <p class="text-xs text-base-content/50">Add .mp3, .flac, .ogg or .wav files to the music folder, then rescan.</p>
+  <p class="text-xs text-base-content/50">Add .mp3, .flac, .ogg or .wav files to the music folder (subfolders are fine), then rescan.</p>
   <button type="button" class="btn btn-sm mt-2" data-action="rescan">{{ icon("refresh", "size-4") }} Rescan library</button>
 </div>
 {% endif %}

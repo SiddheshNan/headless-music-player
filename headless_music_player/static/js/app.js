@@ -26,6 +26,8 @@
     volumeLabel: $("np-volume-label"),
     iconVolume: $("icon-volume"),
     iconMuted: $("icon-muted"),
+    audioAlert: $("audio-alert"),
+    audioError: $("audio-error"),
     queuePanel: $("panel-queue"),
     libraryPanel: $("panel-library"),
     queueCount: $("queue-count"),
@@ -35,11 +37,13 @@
   };
 
   let state = window.INITIAL_STATE;
-  let queueVersion = el.queuePanel.dataset.version;
+  let stateReceivedAt = performance.now();
+  let queueVersion = Number(el.queuePanel.dataset.version);
+  let libraryVersion = Number(el.libraryPanel.dataset.version);
   let seeking = false;
   let volumeDragging = false;
   let volumeTimer = null;
-  let lastVolume = state.playback.volume || 0.5;
+  let lastVolume = state.volume || 0.5;
   let pollTimer = null;
   let polling = false;
 
@@ -65,11 +69,11 @@
     setTimeout(() => alert.remove(), 4000);
   }
 
-  async function api(path, body) {
-    const options = body === undefined ? {} : {
-      method: "POST",
+  async function api(path, body, method = "POST") {
+    const options = body === undefined && method === "GET" ? {} : {
+      method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify(body || {}),
     };
     const res = await fetch(path, options);
     const data = await res.json().catch(() => ({}));
@@ -83,61 +87,72 @@
     return res.text();
   }
 
-  function coverUrl(filename) {
-    return `/api/library/cover/${encodeURIComponent(filename)}`;
-  }
-
   // ---------- rendering ----------
 
-  function render(next) {
-    const prev = state;
-    state = next;
-    const pb = next.playback;
-    const q = next.queue;
-    const track = pb.current_track;
+  function currentPosition() {
+    // Between polls, advance the position locally so the bar moves smoothly.
+    if (state.status !== "playing" || !state.audio.available) return state.position_ms;
+    const elapsed = performance.now() - stateReceivedAt;
+    const position = state.position_ms + elapsed;
+    return state.duration_ms ? Math.min(position, state.duration_ms) : position;
+  }
 
-    el.title.textContent = track ? track.title : "Nothing playing";
+  function renderProgress() {
+    if (seeking) return;
+    const position = currentPosition();
+    el.seek.value = position;
+    el.position.textContent = mmss(position);
+  }
+
+  function render(next) {
+    const prevTrackId = state.current?.track?.id;
+    state = next;
+    stateReceivedAt = performance.now();
+    const current = next.current;
+    const track = current?.track;
+    const paused = next.status !== "playing";
+
+    el.title.textContent = track ? track.title : current ? "Missing file" : "Nothing playing";
     el.title.title = track ? track.title : "";
-    el.artist.textContent = track ? track.artist : "Pick a track from the library";
+    el.artist.textContent = track ? track.artist || "Unknown artist" : current ? "" : "Pick a track from the library";
     document.title = track ? `${track.title} · Headless Player` : "Headless Player";
 
-    const hasCover = Boolean(track && track.has_cover);
-    if (hasCover) {
-      const src = coverUrl(track.filename);
-      if (el.cover.getAttribute("src") !== src) el.cover.src = src;
-    }
-    show(el.cover, hasCover);
-    el.coverFallback.classList.toggle("grid", !hasCover);
-    show(el.coverFallback, !hasCover);
+    const coverUrl = track?.cover_url;
+    if (coverUrl && el.cover.getAttribute("src") !== coverUrl) el.cover.src = coverUrl;
+    show(el.cover, Boolean(coverUrl));
+    el.coverFallback.classList.toggle("grid", !coverUrl);
+    show(el.coverFallback, !coverUrl);
 
-    el.seek.disabled = !track;
-    el.seek.max = pb.duration_ms || 0;
-    if (!seeking) {
-      el.seek.value = pb.position_ms;
-      el.position.textContent = mmss(pb.position_ms);
-    }
-    el.duration.textContent = mmss(pb.duration_ms);
+    el.seek.disabled = !current || next.status === "stopped";
+    el.seek.max = next.duration_ms || 0;
+    el.duration.textContent = mmss(next.duration_ms);
+    renderProgress();
 
-    show(el.iconPlay, pb.is_paused);
-    show(el.iconPause, !pb.is_paused);
-    el.toggle.setAttribute("aria-label", pb.is_paused ? "Play" : "Pause");
-    document.body.classList.toggle("is-paused", pb.is_paused);
+    show(el.iconPlay, paused);
+    show(el.iconPause, !paused);
+    el.toggle.setAttribute("aria-label", paused ? "Play" : "Pause");
+    document.body.classList.toggle("is-paused", paused);
 
-    el.shuffle.classList.toggle("text-primary", q.shuffle);
-    el.shuffle.classList.toggle("text-base-content/50", !q.shuffle);
-    el.shuffle.setAttribute("aria-pressed", String(q.shuffle));
+    el.shuffle.classList.toggle("text-primary", next.shuffle);
+    el.shuffle.classList.toggle("text-base-content/50", !next.shuffle);
+    el.shuffle.setAttribute("aria-pressed", String(next.shuffle));
 
-    const repeatOn = q.repeat_mode !== "off";
+    const repeatOn = next.repeat !== "off";
     el.repeat.classList.toggle("text-primary", repeatOn);
     el.repeat.classList.toggle("text-base-content/50", !repeatOn);
-    el.repeat.title = el.repeat.ariaLabel = `Repeat: ${q.repeat_mode}`;
-    show(el.iconRepeat, q.repeat_mode !== "one");
-    show(el.iconRepeatOne, q.repeat_mode === "one");
+    el.repeat.title = `Repeat: ${next.repeat}`;
+    el.repeat.setAttribute("aria-label", `Repeat: ${next.repeat}`);
+    show(el.iconRepeat, next.repeat !== "one");
+    show(el.iconRepeatOne, next.repeat === "one");
 
-    if (!volumeDragging) renderVolume(pb.volume);
+    if (!volumeDragging) renderVolume(next.volume);
 
-    if (q.version !== queueVersion) refreshQueue();
-    if (!prev || prev.playback.current_file !== pb.current_file) markLibraryCurrent();
+    show(el.audioAlert, !next.audio.available);
+    el.audioError.textContent = `${next.audio.error || ""} Retrying every few seconds.`;
+
+    if (next.queue_version !== queueVersion) refreshQueue(next.queue_version);
+    if (next.library_version !== libraryVersion) refreshLibrary(next.library_version);
+    else if (track?.id !== prevTrackId) markLibraryCurrent();
   }
 
   function renderVolume(volume) {
@@ -149,28 +164,33 @@
   }
 
   function markLibraryCurrent() {
-    const current = state.playback.current_file;
-    el.libraryPanel.querySelectorAll("li[data-filename]").forEach((li) => {
-      li.classList.toggle("is-current", li.dataset.filename === current);
+    const id = state.current?.track?.id;
+    el.libraryPanel.querySelectorAll("li[data-track]").forEach((li) => {
+      li.classList.toggle("is-current", li.dataset.track === id);
     });
   }
 
-  async function refreshQueue() {
-    const version = state.queue.version;
+  async function refreshQueue(version) {
+    queueVersion = version;
     try {
       el.queuePanel.innerHTML = await fetchHtml("/partials/queue");
-      queueVersion = version;
-      el.queueCount.textContent = state.queue.tracks.length;
+      el.queueCount.textContent = state.queue.length;
     } catch (e) {
-      console.error(e);
+      queueVersion = null; // try again on the next poll
     }
   }
 
-  async function refreshLibrary() {
+  async function refreshLibrary(version) {
+    libraryVersion = version;
     const query = $("library-search")?.value || "";
-    el.libraryPanel.innerHTML = await fetchHtml("/partials/library");
-    const list = $("library-list");
-    el.libraryCount.textContent = list ? list.dataset.libraryCount : "0";
+    try {
+      el.libraryPanel.innerHTML = await fetchHtml("/partials/library");
+    } catch (e) {
+      libraryVersion = null;
+      return;
+    }
+    const header = el.libraryPanel.querySelector("[data-library-count]");
+    el.libraryCount.textContent = header ? header.dataset.libraryCount : "0";
     const search = $("library-search");
     if (search && query) {
       search.value = query;
@@ -184,7 +204,7 @@
     if (polling) return;
     polling = true;
     try {
-      render(await api("/api/state"));
+      render(await api("/api/state", undefined, "GET"));
       show(el.connection, false);
       el.connection.classList.remove("flex");
     } catch (e) {
@@ -211,48 +231,60 @@
     else startPolling();
   });
 
+  setInterval(renderProgress, 250);
+
   // ---------- actions ----------
+  // Most endpoints answer with the new state, which is rendered right away.
 
   const actions = {
-    toggle: () => api("/api/playback/toggle", {}),
-    next: () => api("/api/playback/next", {}),
-    prev: () => api("/api/playback/prev", {}),
-    shuffle: () => api("/api/queue/shuffle", {}),
-    repeat: () => api("/api/queue/repeat", {}),
-    play: (btn) => api("/api/playback/play", { filename: btn.dataset.filename }),
-    add: async (btn) => {
-      const res = await api("/api/queue/add", { filename: btn.dataset.filename });
-      toast(res.added ? "Added to queue" : "Already in the queue", res.added ? "success" : "info");
+    toggle: () => api("/api/playback/toggle"),
+    next: () => api("/api/playback/next"),
+    prev: () => api("/api/playback/prev"),
+    shuffle: () => api("/api/queue/shuffle"),
+    repeat: () => api("/api/queue/repeat"),
+    "play-track": (btn) => api("/api/playback/play", { track_id: btn.dataset.track }),
+    "play-entry": (btn) => api("/api/playback/play", { entry_id: btn.dataset.entry }),
+    "play-next": async (btn) => {
+      const res = await api("/api/queue/add", { track_ids: [btn.dataset.track], next: true });
+      toast("Playing next", "success");
+      return res.state;
     },
-    remove: (btn) => api("/api/queue/remove", { index: Number(btn.dataset.index) }),
-    clear: () => api("/api/queue/clear", {}),
+    add: async (btn) => {
+      const res = await api("/api/queue/add", { track_ids: [btn.dataset.track] });
+      toast("Added to the queue", "success");
+      return res.state;
+    },
+    remove: (btn) => api(`/api/queue/${encodeURIComponent(btn.dataset.entry)}`, undefined, "DELETE"),
+    clear: () => api("/api/queue/clear"),
     "play-all": () => api("/api/queue/play-all", { shuffle: false }),
     "shuffle-all": () => api("/api/queue/play-all", { shuffle: true }),
-    mute: () => setVolume(state.playback.volume > 0 ? 0 : lastVolume),
+    mute: () => setVolume(state.volume > 0 ? 0 : lastVolume),
     rescan: async () => {
-      await api("/api/library/reload", {});
-      await refreshLibrary();
-      toast("Library rescanned", "success");
+      const res = await api("/api/library/rescan");
+      toast(`Library rescanned: ${res.total} tracks (${res.added} new, ${res.removed} removed)`, "success");
     },
   };
 
-  document.addEventListener("click", async (event) => {
-    const btn = event.target.closest("[data-action]");
-    if (!btn || btn.disabled) return;
-    const action = actions[btn.dataset.action];
+  async function runAction(name, btn) {
+    const action = actions[name];
     if (!action) return;
-
     // Quick toggles stay clickable so fast repeated clicks all count; slow actions lock.
-    const locks = SLOW_ACTIONS.has(btn.dataset.action);
+    const locks = btn && SLOW_ACTIONS.has(name);
     if (locks) btn.disabled = true;
     try {
-      await action(btn);
-      await poll();
+      const result = await action(btn);
+      if (result && result.status) render(result);
+      else await poll();
     } catch (e) {
       toast(e.message);
     } finally {
       if (locks) btn.disabled = false;
     }
+  }
+
+  document.addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-action]");
+    if (btn && !btn.disabled) runAction(btn.dataset.action, btn);
   });
 
   // ---------- seek ----------
@@ -264,12 +296,12 @@
 
   el.seek.addEventListener("change", async () => {
     try {
-      await api("/api/playback/seek", { position_ms: Number(el.seek.value) });
-      await poll();
+      render(await api("/api/playback/seek", { position_ms: Math.round(Number(el.seek.value)) }));
     } catch (e) {
       toast(e.message);
     } finally {
       seeking = false;
+      renderProgress();
     }
   });
 
@@ -278,7 +310,7 @@
   async function setVolume(volume) {
     if (volume > 0) lastVolume = volume;
     renderVolume(volume);
-    await api("/api/playback/volume", { volume });
+    return api("/api/playback/volume", { volume });
   }
 
   el.volume.addEventListener("input", () => {
@@ -290,7 +322,7 @@
   });
 
   el.volume.addEventListener("change", () => {
-    // Let the debounced request land before polling may overwrite the slider.
+    // Let the debounced request land before a poll may overwrite the slider.
     setTimeout(() => (volumeDragging = false), 400);
   });
 
@@ -342,7 +374,7 @@
     if (event.target.closest("input, textarea, button, select")) return;
     if (event.code === "Space") {
       event.preventDefault();
-      actions.toggle().then(poll).catch((e) => toast(e.message));
+      runAction("toggle");
     }
   });
 

@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   check:
-    name: Lint, import and build CSS
+    name: Lint, test and build CSS
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,11 +19,14 @@ jobs:
         with:
           python-version: "3.11"
       - run: pipx run ruff check .
-      - name: Install and import
+      - name: Install
         run: |
           python -m venv .venv
-          .venv/bin/pip install -q .
-          .venv/bin/python -c "from headless_music_player.app import create_app; create_app(start=False)"
+          .venv/bin/pip install -q ".[dev]"
+      - name: Test
+        env:
+          SDL_AUDIODRIVER: dummy
+        run: .venv/bin/pytest -q
       - run: python scripts/build_css.py
 
   docker:
