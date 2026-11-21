@@ -85,3 +85,15 @@ def choice(data: dict, name: str, options: tuple[str, ...]) -> str | None:
     if value not in options:
         raise ApiError(f"{name} must be one of: {', '.join(options)}.")
     return value
+
+
+def nullable_string(data: dict, name: str, max_length: int = 512) -> tuple[bool, str | None]:
+    """(sent, value) for a field where null is meaningful, e.g. "use the default"."""
+    if name not in data:
+        return False, None
+    value = data[name]
+    if value is None:
+        return True, None
+    if not isinstance(value, str) or not value or len(value) > max_length:
+        raise ApiError(f"{name} must be a non-empty string or null.")
+    return True, value

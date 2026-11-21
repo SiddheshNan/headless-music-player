@@ -161,12 +161,28 @@ def settings():
 
 @api.post("/settings")
 def settings_update():
-    """Change settings: {"normalize": bool, "loudness_target": "quiet" | "normal" | "loud"}."""
+    """Change settings. Any of:
+
+    {"normalize": bool, "loudness_target": "quiet" | "normal" | "loud",
+     "output": "<device name from /api/audio/outputs>" | null (system default)}
+    """
     body = v.json_body()
     normalize = v.boolean(body, "normalize")
     target = v.choice(body, "loudness_target", tuple(LOUDNESS_TARGETS))
-    runtime().engine.update_settings(normalize, target)
+    output_sent, output = v.nullable_string(body, "output")
+    engine = runtime().engine
+    if output_sent:
+        engine.set_output(output)
+    if normalize is not None or target is not None:
+        engine.update_settings(normalize, target)
     return jsonify(settings_json())
+
+
+@api.get("/audio/outputs")
+def audio_outputs():
+    """The output devices connected now, and the chosen one (null: system default)."""
+    engine = runtime().engine
+    return jsonify({"selected": engine.snapshot().output, "devices": engine.output_devices()})
 
 
 # ============== Queue ==============

@@ -9,6 +9,11 @@ from .base import AudioUnavailableError, BackendError
 
 logger = logging.getLogger(__name__)
 
+os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
+# Otherwise SDL takes over SIGTERM (when nothing else handles it) and ignores it,
+# so `kill` or `docker stop` without gunicorn couldn't stop the player.
+os.environ.setdefault("SDL_NO_SIGNAL_HANDLERS", "1")
+
 
 class PygameBackend:
     def __init__(self, settings: dict | None = None):
@@ -19,28 +24,50 @@ class PygameBackend:
         self._paused = False
         self._offset_ms = 0  # get_pos() counts from play(); this maps it to the file position
 
-    def open(self) -> None:
-        os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
-        # Otherwise SDL takes over SIGTERM (when nothing else handles it) and ignores it,
-        # so `kill` or `docker stop` without gunicorn couldn't stop the player.
-        os.environ.setdefault("SDL_NO_SIGNAL_HANDLERS", "1")
+    def open(self, device: str | None = None) -> None:
         try:
             import pygame
             from pygame import mixer
         except ImportError as e:
             raise AudioUnavailableError(f"pygame is not installed: {e}") from e
         try:
-            mixer.init(**self._settings)
+            if device:
+                mixer.init(**self._settings, devicename=device)
+            else:
+                mixer.init(**self._settings)
         except pygame.error as e:
+            if device and "no such device" in str(e).lower():
+                raise AudioUnavailableError(f"{device} isn't connected") from e
             raise AudioUnavailableError(str(e)) from e
         self._mixer = mixer
         self._error = pygame.error
-        logger.info(f"Audio device open: {mixer.get_init()}")
+        logger.info(f"Audio output open: {device or 'system default'} {mixer.get_init()}")
+
+    def output_devices(self) -> list[str]:
+        """SDL lists devices only while audio is initialised; open the default briefly if needed."""
+        try:
+            import pygame
+            from pygame import mixer
+            from pygame._sdl2 import audio as sdl_audio
+        except ImportError:
+            return []
+
+        if self._mixer is not None:
+            return list(sdl_audio.get_audio_device_names(False))
+        try:
+            mixer.init(**self._settings)
+        except pygame.error:
+            return []
+        try:
+            return list(sdl_audio.get_audio_device_names(False))
+        finally:
+            mixer.quit()
 
     def close(self) -> None:
         if self._mixer:
             self._mixer.quit()
             self._mixer = None
+        self._started = self._paused = False
 
     def load(self, path: Path) -> None:
         self._started = self._paused = False

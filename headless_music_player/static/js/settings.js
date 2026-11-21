@@ -29,6 +29,41 @@
     return data;
   }
 
+  const output = $("setting-output");
+  const outputStatus = $("output-status");
+  let switching = false;
+
+  const label = (name) => name.replace(/\n/g, " · ");
+
+  function renderOutputStatus(audio) {
+    outputStatus.replaceChildren();
+    const dot = document.createElement("span");
+    const text = document.createElement("span");
+    if (switching) {
+      dot.className = "loading loading-spinner loading-xs text-primary";
+      text.className = "text-base-content/60";
+      text.textContent = "Switching output…";
+    } else if (audio.available) {
+      dot.className = "status status-success";
+      text.className = "text-base-content/60";
+      text.textContent = `Playing through ${label(audio.output || "the system default")}`;
+    } else {
+      dot.className = "status status-warning";
+      text.className = "text-warning";
+      text.textContent = `${audio.error || "Output unavailable"}. Retrying every few seconds.`;
+    }
+    outputStatus.append(dot, text);
+  }
+
+  function renderOutputs(devices, selected) {
+    const options = [new Option("System default", "", false, !selected)];
+    devices.forEach((d) => options.push(new Option(label(d), d, false, d === selected)));
+    if (selected && !devices.includes(selected)) {
+      options.push(new Option(`${label(selected)} (not connected)`, selected, false, true));
+    }
+    output.replaceChildren(...options);
+  }
+
   function render(settings) {
     normalize.checked = settings.normalize;
     targetRow.disabled = !settings.normalize;
@@ -49,6 +84,9 @@
     progress.value = analyzed;
     progress.classList.toggle("hidden", !total || done);
     $("library-tracks").textContent = `${total} songs`;
+
+    if (!switching) output.value = settings.audio.output || "";
+    renderOutputStatus(settings.audio);
   }
 
   async function save(change) {
@@ -68,6 +106,38 @@
   }
 
   normalize.addEventListener("change", () => save({ normalize: normalize.checked }));
+
+  output.addEventListener("change", async () => {
+    switching = true;
+    output.disabled = true;
+    renderOutputStatus({});
+    try {
+      const settings = await request("/api/settings", { output: output.value || null });
+      switching = false;
+      render(settings);
+      toast("Output changed", "success");
+    } catch (e) {
+      switching = false;
+      toast(e.message);
+      refresh();
+    } finally {
+      output.disabled = false;
+    }
+  });
+
+  $("refresh-outputs").addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+      const res = await request("/api/audio/outputs");
+      renderOutputs(res.devices, res.selected);
+      toast(`${res.devices.length} output${res.devices.length === 1 ? "" : "s"} found`, "info");
+    } catch (e) {
+      toast(e.message);
+    } finally {
+      button.disabled = false;
+    }
+  });
   targets.forEach((input) => input.addEventListener("change", () => save({ loudness_target: input.value })));
 
   $("rescan").addEventListener("click", async (event) => {

@@ -52,3 +52,17 @@ def test_unloadable_file_raises_backend_error(backend, tmp_path):
     bad.write_bytes(os.urandom(64))
     with pytest.raises(BackendError):
         backend.load(bad)
+
+
+def test_lists_outputs_and_refuses_a_missing_one(monkeypatch):
+    monkeypatch.setenv("SDL_AUDIODRIVER", "dummy")
+    from headless_music_player.audio import AudioUnavailableError
+    from headless_music_player.audio.pygame_backend import PygameBackend
+
+    b = PygameBackend()
+    assert isinstance(b.output_devices(), list)  # works before open() too
+    with pytest.raises(AudioUnavailableError):
+        b.open("No Such DAC")
+    b.open()
+    assert isinstance(b.output_devices(), list)
+    b.close()

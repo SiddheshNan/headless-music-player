@@ -18,6 +18,37 @@
     <h2 id="sound-heading" class="mb-3 px-1 text-xs font-semibold uppercase tracking-wider text-base-content/50">Sound</h2>
     <div class="card border border-base-300 bg-base-200/60">
       <div class="divide-y divide-base-300">
+        {% set selected = settings.audio.output %}
+        <div class="p-5">
+          <div class="flex flex-wrap items-center justify-between gap-4">
+            <span class="min-w-0">
+              <label for="setting-output" class="flex items-center gap-2 font-medium">{{ icon("speaker", "size-4 text-primary") }} Audio output</label>
+              <span class="mt-1 block text-sm text-base-content/60">The Pi's headphone jack, HDMI or a USB DAC. Switching keeps the song playing where it was.</span>
+            </span>
+            <div class="flex w-full items-center gap-1 sm:w-auto">
+              <select id="setting-output" class="select select-sm min-w-0 flex-1 sm:w-64 sm:flex-none">
+                <option value="" {{ "selected" if not selected }}>System default</option>
+                {% for d in devices %}
+                <option value="{{ d }}" {{ "selected" if d == selected }}>{{ d|replace("\n", " · ") }}</option>
+                {% endfor %}
+                {% if selected and selected not in devices %}
+                <option value="{{ selected }}" selected>{{ selected|replace("\n", " · ") }} (not connected)</option>
+                {% endif %}
+              </select>
+              <button type="button" id="refresh-outputs" class="btn btn-ghost btn-square btn-sm text-base-content/60" title="Look for devices again" aria-label="Look for output devices again">
+                {{ icon("refresh", "size-4") }}
+              </button>
+            </div>
+          </div>
+          <p id="output-status" class="mt-3 flex items-center gap-1.5 text-xs" role="status">
+            {% if settings.audio.available %}
+            <span class="status status-success"></span><span class="text-base-content/60">Playing through {{ (selected or "the system default")|replace("\n", " · ") }}</span>
+            {% else %}
+            <span class="status status-warning"></span><span class="text-warning">{{ settings.audio.error or "Output unavailable" }}. Retrying every few seconds.</span>
+            {% endif %}
+          </p>
+        </div>
+
         <label class="flex cursor-pointer items-start justify-between gap-6 p-5">
           <span>
             <span class="flex items-center gap-2 font-medium">{{ icon("waveform", "size-4 text-primary") }} Volume normalization</span>

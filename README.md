@@ -20,6 +20,7 @@ The audio comes out of the Pi itself (3.5 mm jack, USB DAC or HDMI). Your phone 
 - Library from a folder of `.mp3`, `.flac`, `.ogg` and `.wav` files (subfolders too), with tags, cover art and search
 - Upload songs from your phone or laptop: drag and drop, with progress for each file
 - Volume normalization: every song plays at about the same loudness, no more reaching for the volume
+- Pick the output from the Settings page: headphone jack, HDMI or a USB DAC
 - Picks up where it left off after a restart or power cut: queue, track, position and volume
 - Copes with a sound card that shows up late at boot: it waits for it and then starts playing
 - A fast, server-rendered web UI that works on phones and desktops, in light and dark

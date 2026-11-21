@@ -14,12 +14,15 @@ class FakeBackend:
         default_duration_ms: int = 60_000,
         unavailable_times: int = 0,
         seekable: bool = True,
+        devices: list[str] | None = None,
     ):
         self.clock = clock
         self.durations_ms = durations_ms or {}
         self.default_duration_ms = default_duration_ms
         self.unavailable_times = unavailable_times  # open() fails this many times first
         self.seekable = seekable
+        self.devices = devices if devices is not None else ["Built-in Audio", "USB DAC"]  # plugged in now
+        self.device: str | None = None
         self.is_open = False
         self.volume = None
         self.loaded: Path | None = None
@@ -28,14 +31,21 @@ class FakeBackend:
         self._base_ms = 0
         self._since = 0.0
 
-    def open(self) -> None:
+    def open(self, device: str | None = None) -> None:
         if self.unavailable_times > 0:
             self.unavailable_times -= 1
             raise AudioUnavailableError("no sound card (fake)")
-        self.is_open = True
+        if device is not None and device not in self.devices:
+            raise AudioUnavailableError(f"{device} isn't connected")
+        self.is_open, self.device = True, device
+        self.calls.append(f"open {device or 'default'}")
+
+    def output_devices(self) -> list[str]:
+        return list(self.devices)
 
     def close(self) -> None:
         self.is_open = False
+        self._playing = self._paused = False
 
     def load(self, path: Path) -> None:
         if "corrupt" in path.name:

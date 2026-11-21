@@ -24,7 +24,7 @@ Release: `scripts/build.py` writes the version into `headless_music_player/__ini
 - `app.py`: `create_app(settings, backend, start)` builds the `Runtime` (library, engine) and registers `web/`. Gunicorn uses `headless_music_player.app:create_app()`. Exactly one process.
 - `engine.py`: `PlayerEngine`. Public methods are thread-safe and run as commands on the engine thread (`_call`); `_`-prefixed methods run only there. `tick()` detects track ends, retries the audio device, saves. `snapshot()` returns a frozen `Snapshot`. Refusals raise `CommandError(message, status)`.
 - `playqueue.py`: `PlayQueue`, a pure model (entries with ids, insertion and shuffled orders, current entry, repeat).
-- `audio/`: `AudioBackend` protocol, `PygameBackend`, `FakeBackend` (injectable clock).
+- `audio/`: `AudioBackend` protocol (`open(device)`, `output_devices()`, playback), `PygameBackend`, `FakeBackend` (injectable clock, fake device list).
 - `library/`: `Library` (scan with index cache in `cache/library.json`, track id = path in the music folder, hashed cover files, `add_file` for single files), `metadata.py`, `uploads.py` (safe names, temp file + audio check + rename, duplicates), `loudness.py` (BS.1770 LUFS via miniaudio + numpy), `analyzer.py` (`LoudnessAnalyzer` background thread; `Runtime` starts it).
 - `store.py`: `StateStore` (versioned `state.json`, atomic writes, 0.1 migration). `fsutil.py`: atomic write helpers.
 - `web/`: `api.py` (JSON API), `views.py` (page and partials), `validate.py` (body checks raising `ApiError`), `serialize.py` (shared JSON shapes).

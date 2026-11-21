@@ -51,6 +51,12 @@ With `threaded=False` commands run on the caller's thread and `tick()` is called
 
 `PygameBackend` sets `SDL_NO_SIGNAL_HANDLERS`, because SDL otherwise takes over SIGTERM when nothing else handles it and ignores it, so the player couldn't be stopped without gunicorn. It opens the mixer at 44.1 kHz, 16-bit, **mono** (one speaker, by design), with a 2048-sample buffer against crackling on the Pi. The position is `mixer.music.get_pos()` (which counts from `play()` and stops while paused) plus an offset for where playback started or was seeked to, so it doesn't drift like a wall clock. `get_busy()` is also False while paused, so the backend tracks pause itself to tell "paused" from "finished".
 
+### Output device
+
+The output is "system default" or a device chosen by name on the Settings page (`output` in `state.json`). `PygameBackend.output_devices()` lists what SDL can open (with ALSA on the Pi: the headphone jack, HDMI ports, USB DACs, as their ALSA descriptions), and `open(device)` opens one by name. Switching (`PlayerEngine.set_output`) closes the device, opens the new one and restarts the current song at the same position; paused stays paused. If the new device fails to open, it goes back to the previous one and reports why.
+
+A chosen device that isn't connected is treated like a missing sound card: the player waits and retries every 5 s rather than playing through a different output, so a USB DAC that appears a few seconds after boot is picked up, and nothing plays from the wrong speaker if it's unplugged.
+
 ## Library
 
 `Library` walks the music folder, subfolders included (hidden files and folders skipped), for `.mp3`, `.flac`, `.ogg` and `.wav`. A track's id is its path inside the music folder with forward slashes; only ids from the index are turned into paths, so clients can't name arbitrary files.

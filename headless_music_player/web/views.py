@@ -36,7 +36,7 @@ def index():
 
 @views.get("/settings")
 def settings():
-    return render_template("settings.html", settings=settings_json())
+    return render_template("settings.html", settings=settings_json(), devices=runtime().engine.output_devices())
 
 
 @views.get("/partials/queue")

@@ -13,8 +13,11 @@ class BackendError(Exception):
 class AudioBackend(Protocol):
     """One track at a time. Only the engine thread calls these methods."""
 
-    def open(self) -> None:
-        """Open the device. Raises AudioUnavailableError."""
+    def open(self, device: str | None = None) -> None:
+        """Open an output device by name (None: the system default). Raises AudioUnavailableError."""
+
+    def output_devices(self) -> list[str]:
+        """Names of the output devices that can be opened right now."""
 
     def close(self) -> None: ...
 

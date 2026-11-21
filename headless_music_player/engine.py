@@ -65,6 +65,7 @@ class Snapshot:
     queue: tuple[Entry, ...]  # play order
     audio_available: bool
     audio_error: str | None
+    output: str | None  # chosen output device; None means the system default
     normalize: bool
     loudness_target: str
     gain_db: float | None  # normalization gain for the current track; None if off or not measured yet
@@ -101,6 +102,7 @@ class PlayerEngine:
         self._volume = DEFAULT_VOLUME
         self._normalize = True
         self._loudness_target = DEFAULT_LOUDNESS_TARGET
+        self._output: str | None = None
         self._loaded: str | None = None  # entry id whose file is loaded in the backend
 
         self._audio_ok = False
@@ -252,6 +254,14 @@ class PlayerEngine:
     def update_settings(self, normalize: bool | None = None, loudness_target: str | None = None) -> None:
         self._call(self._update_settings, normalize, loudness_target)
 
+    def output_devices(self) -> list[str]:
+        """Output devices that are connected now (asks the audio system, on the engine thread)."""
+        return self._call(self.backend.output_devices)
+
+    def set_output(self, device: str | None) -> None:
+        """Play through another output device (None: the system default), keeping the position."""
+        self._call(self._set_output, device)
+
     def loudness_measured(self, track_id: str) -> None:
         """Called by the loudness analyzer; re-levels the current track if it was the one measured."""
         self._call(self._loudness_measured, track_id)
@@ -341,6 +351,36 @@ class PlayerEngine:
         if loudness_target is not None:
             self._loudness_target = loudness_target
         self._apply_volume()
+
+    def _set_output(self, device: str | None) -> None:
+        if device == self._output:
+            return
+        if device is not None and device not in self.backend.output_devices():
+            raise CommandError(f"{device} isn't connected.", 404)
+        previous = self._output
+        position = self._current_position()
+        if self._status != "stopped":
+            self._position_ms = position
+        self._close_audio()
+        self._output = device
+        if not self._open_audio():
+            # Go back to what worked, and say why.
+            error = self._audio_error
+            self._output = previous
+            self._open_audio()
+            if self._status == "playing":
+                self._play_current(self._position_ms)
+            raise CommandError(f"Couldn't switch to {device or 'the default output'}: {error}", 503)
+        logger.info(f"Output: {device or 'system default'}")
+        if self._status == "playing":
+            self._play_current(self._position_ms)
+
+    def _close_audio(self) -> None:
+        if self._audio_ok:
+            self.backend.stop()
+            self.backend.close()
+        self._loaded = None
+        self._audio_ok = False
 
     def _loudness_measured(self, track_id: str) -> None:
         if self._queue.current() and self._queue.current().track_id == track_id:
@@ -526,7 +566,7 @@ class PlayerEngine:
 
     def _open_audio(self) -> bool:
         try:
-            self.backend.open()
+            self.backend.open(self._output)
         except AudioUnavailableError as e:
             if self._audio_error != str(e):
                 logger.warning(f"Audio device unavailable ({e}); retrying every {AUDIO_RETRY_S:.0f}s")
@@ -573,6 +613,7 @@ class PlayerEngine:
             queue=self._queue_tuple,
             audio_available=self._audio_ok,
             audio_error=self._audio_error,
+            output=self._output,
             normalize=self._normalize,
             loudness_target=self._loudness_target,
             gain_db=self._gain_db(),
@@ -583,6 +624,7 @@ class PlayerEngine:
             "volume": self._volume,
             "normalize": self._normalize,
             "loudness_target": self._loudness_target,
+            "output": self._output,
             "status": self._status,
             "position_ms": self._current_position(),
             "queue": self._queue.to_dict(),
@@ -615,6 +657,8 @@ class PlayerEngine:
             self._normalize = data["normalize"]
         if data.get("loudness_target") in LOUDNESS_TARGETS:
             self._loudness_target = data["loudness_target"]
+        if isinstance(data.get("output"), str) and data["output"]:
+            self._output = data["output"]
         status = data.get("status")
         if status in STATUSES and self._queue.current() is not None:
             self._status = status

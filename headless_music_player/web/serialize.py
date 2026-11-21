@@ -61,7 +61,7 @@ def settings_json() -> dict:
         "library": {"music_dir": str(rt.settings.music_dir), "tracks": total},
         "data_dir": str(rt.settings.runtime_dir),
         "max_upload_mb": rt.settings.max_upload_mb,
-        "audio": {"available": snap.audio_available, "error": snap.audio_error},
+        "audio": {"available": snap.audio_available, "error": snap.audio_error, "output": snap.output},
         "version": __version__,
     }
 
