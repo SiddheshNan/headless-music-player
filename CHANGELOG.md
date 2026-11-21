@@ -16,6 +16,7 @@ Notable changes to Headless Music Player. Versions follow [semantic versioning](
 
 ### Added
 
+- **Upload songs from the browser.** An Upload button opens a modal: drop songs anywhere on the page or browse, keep adding more, remove any with ✕, then upload them one by one with progress for each. Duplicates are detected, name clashes get a number, and uploaded songs can be queued in one click. `POST /api/library/upload`; size limit `HMP_MAX_UPLOAD_MB` (500 by default).
 - **Play next** in the library, next to Add to queue.
 - Subfolders of the music folder are scanned. Track ids are paths inside the music folder.
 - Untagged files named "Artist - Title" show the artist and title.
@@ -33,6 +34,8 @@ Notable changes to Headless Music Player. Versions follow [semantic versioning](
 
 ### Fixed
 
+- `python -m headless_music_player` ignored SIGTERM (SDL took over the signal), so `kill` didn't stop it.
+- `--dev` didn't reload changed templates.
 - After a power cut or a reboot of the Pi, the volume could go back to 50% and the queue be lost. The state was rewritten in place every second, so an interrupted write could leave an empty or partial file, which then failed to load. It's now written atomically, and an unreadable file is kept as `state.json.corrupt`.
 - After a restart while paused, pressing Play continued the audio but showed the progress from 0:00.
 - Next did nothing useful with repeat "one": it replayed the same track. Repeat "one" now only applies when a track ends by itself.

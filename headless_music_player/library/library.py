@@ -132,6 +132,15 @@ class Library:
             )
             return result
 
+    def add_file(self, path: Path) -> Track:
+        """Index one file in the music folder without rescanning everything (used after uploads)."""
+        with self._scan_lock:
+            track_id = path.relative_to(self.music_dir).as_posix()
+            track = self._read(track_id, path, path.stat())
+            self._set({**self._tracks, track_id: track})
+            self._save_index()
+            return track
+
     def _walk(self):
         if not self.music_dir.is_dir():
             return

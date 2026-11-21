@@ -54,6 +54,7 @@ def create_app(settings: Settings | None = None, backend: AudioBackend | None = 
     if start:
         settings = settings or Settings.from_env()
         logger.info(f"Headless Music Player {__version__}: music in {settings.music_dir}, data in {settings.runtime_dir}")
+        app.config["MAX_CONTENT_LENGTH"] = settings.max_upload_mb * 1024 * 1024
         rt = build_runtime(settings, backend, **engine_options)
         rt.engine.start()
         app.extensions["player"] = rt

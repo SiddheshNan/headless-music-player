@@ -378,6 +378,9 @@
     }
   });
 
+  // For the other page scripts (upload.js).
+  window.hmp = { toast, refresh: poll };
+
   render(state);
   startPolling();
 })();

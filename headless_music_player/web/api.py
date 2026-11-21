@@ -3,9 +3,10 @@
 Errors always look like {"error": "message"} with a 4xx/5xx status.
 """
 
-from flask import Blueprint, abort, jsonify, send_file
+from flask import Blueprint, abort, jsonify, request, send_file
 
 from .. import __version__
+from ..library.uploads import UploadError, save_upload
 from ..playqueue import REPEAT_MODES
 from . import validate as v
 from .serialize import queue_json, runtime, state_json, track_json
@@ -116,6 +117,26 @@ def library_rescan():
             "updated": result.updated,
         }
     )
+
+
+@api.post("/library/upload")
+def library_upload():
+    """Add one song to the music folder: multipart form with a "file" field.
+
+    One file per request, so clients can show progress per file. Answers 201 with the new
+    track, or 200 with "duplicate": true when the identical file is already there.
+    """
+    upload = request.files.get("file")
+    if upload is None or not upload.filename:
+        raise v.ApiError("Send the song as a multipart form field named file.")
+    rt = runtime()
+    try:
+        result = save_upload(rt.library, upload.stream, upload.filename)
+    except UploadError as e:
+        raise v.ApiError(str(e)) from e
+    if result.created:
+        rt.engine.library_changed()
+    return jsonify({"track": track_json(result.track), "duplicate": not result.created}), 201 if result.created else 200
 
 
 @api.get("/library/covers/<name>")

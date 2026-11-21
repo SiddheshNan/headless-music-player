@@ -48,7 +48,7 @@ With `threaded=False` commands run on the caller's thread and `tick()` is called
 
 `AudioBackend` is a small protocol: `open`, `load`, `play(start_ms)`, `pause`, `resume`, `stop`, `seek`, `set_volume`, `position_ms`, `is_finished`. `open` raises `AudioUnavailableError`; `load` raises `BackendError`.
 
-`PygameBackend` opens the mixer at 44.1 kHz, 16-bit, **mono** (one speaker, by design), with a 2048-sample buffer against crackling on the Pi. The position is `mixer.music.get_pos()` (which counts from `play()` and stops while paused) plus an offset for where playback started or was seeked to, so it doesn't drift like a wall clock. `get_busy()` is also False while paused, so the backend tracks pause itself to tell "paused" from "finished".
+`PygameBackend` sets `SDL_NO_SIGNAL_HANDLERS`, because SDL otherwise takes over SIGTERM when nothing else handles it and ignores it, so the player couldn't be stopped without gunicorn. It opens the mixer at 44.1 kHz, 16-bit, **mono** (one speaker, by design), with a 2048-sample buffer against crackling on the Pi. The position is `mixer.music.get_pos()` (which counts from `play()` and stops while paused) plus an offset for where playback started or was seeked to, so it doesn't drift like a wall clock. `get_busy()` is also False while paused, so the backend tracks pause itself to tell "paused" from "finished".
 
 ## Library
 
@@ -57,6 +57,19 @@ With `threaded=False` commands run on the caller's thread and `tick()` is called
 Tags are read with mutagen (ID3 frames for MP3/WAV, Vorbis comments for FLAC/OGG). Untagged files named "Artist - Title" are split into both. Embedded cover art is stored in `cache/covers/` named by a hash of the image (shared covers are stored once, and the URLs can be cached forever); covers no longer used are deleted after a scan.
 
 The index is saved to `cache/library.json` with each file's size and modification time. At startup it's loaded first, then a scan re-reads only files that changed. A scan builds a new index and swaps it in, so readers never see a half-built one. **Rescan** runs a scan, then tells the engine so clients refresh.
+
+## Uploads
+
+`POST /api/library/upload` takes one file per request (multipart field `file`), so the UI can show progress per file. `library/uploads.py`:
+
+1. Cleans the name: the last path component only, no control or reserved characters, no leading dots; spaces and non-Latin letters stay. Only supported extensions are accepted.
+2. Streams the body to a hidden temp file in the music folder (the scan skips hidden files), fsyncs it and checks with mutagen that it's audio with a length.
+3. If a file with that name exists and has the same content, it's reported as a duplicate; otherwise the new file gets " (2)", " (3)"… Choosing the name and renaming into it happen under one lock.
+4. Renames it into the music folder root and indexes just that file (`Library.add_file`), so it's playable at once without a rescan.
+
+The size limit is `HMP_MAX_UPLOAD_MB` (Flask's `MAX_CONTENT_LENGTH`); larger requests get a 413.
+
+The upload modal (`partials/upload_modal.html`, `static/js/upload.js`) collects files from the file picker or from dropping anywhere on the page, adding to the list on every drop and skipping files already in it. Unsupported or too-large files are flagged before uploading. Upload sends them one at a time with XHR upload progress; each row shows its own spinner, progress and result, and the header button shows a spinner while uploads continue in the background. Finished uploads can be added to the queue in one click.
 
 ## State and persistence
 
@@ -79,6 +92,7 @@ Styles are Tailwind CSS v4 with daisyUI v5, compiled by the standalone CLI (`scr
 | `HMP_RUNTIME_DIR` | `<repo>/runtime` (`/app/data` in Docker) | `state.json` and `cache/` |
 | `HMP_MUSIC_DIR` | `$HMP_RUNTIME_DIR/music` (`/app/music` in Docker) | the music folder |
 | `HMP_HOST`, `HMP_PORT` | `0.0.0.0`, `8000` | for `python -m headless_music_player` |
+| `HMP_MAX_UPLOAD_MB` | `500` | largest song that can be uploaded |
 | `SDL_AUDIODRIVER` | `alsa` in Docker | `dummy` runs without a sound card |
 
 Tuning constants (tick, retry and save intervals, mixer settings) are in `config.py`.

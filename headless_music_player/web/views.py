@@ -1,7 +1,8 @@
 """Server-rendered page and the partials the page script swaps in."""
 
-from flask import Blueprint, render_template
+from flask import Blueprint, current_app, render_template
 
+from ..config import SUPPORTED_EXTENSIONS
 from .serialize import queue_json, runtime, state_json, track_json
 
 views = Blueprint("views", __name__)
@@ -23,7 +24,14 @@ def _library_context():
 @views.get("/")
 def index():
     state = state_json()
-    return render_template("index.html", state=state, queue=queue_json(), **_library_context())
+    return render_template(
+        "index.html",
+        state=state,
+        queue=queue_json(),
+        max_upload_bytes=current_app.config.get("MAX_CONTENT_LENGTH") or 0,
+        extensions=SUPPORTED_EXTENSIONS,
+        **_library_context(),
+    )
 
 
 @views.get("/partials/queue")

@@ -4,7 +4,7 @@ import logging
 from concurrent.futures import TimeoutError as FutureTimeout
 
 from flask import Flask, jsonify, request
-from werkzeug.exceptions import HTTPException
+from werkzeug.exceptions import HTTPException, RequestEntityTooLarge
 
 from ..engine import CommandError
 from .api import api
@@ -26,6 +26,11 @@ def register(app: Flask) -> None:
     @app.errorhandler(FutureTimeout)
     def busy(e):
         return jsonify({"error": "The player is busy. Try again."}), 503
+
+    @app.errorhandler(RequestEntityTooLarge)
+    def too_large(e):
+        limit = (app.config.get("MAX_CONTENT_LENGTH") or 0) // (1024 * 1024)
+        return jsonify({"error": f"The file is larger than the {limit} MB limit."}), 413
 
     @app.errorhandler(HTTPException)
     def http_error(e):

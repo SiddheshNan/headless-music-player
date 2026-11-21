@@ -18,6 +18,8 @@ def main():
 
     app = create_app(settings)
     app.config["TEMPLATES_AUTO_RELOAD"] = args.dev
+    # The Jinja environment already exists (template filters are registered at startup).
+    app.jinja_env.auto_reload = args.dev
     # No reloader: it would start a second process that opens the audio device too.
     app.run(host=settings.host, port=settings.port, threaded=True, use_reloader=False)
 

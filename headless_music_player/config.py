@@ -26,6 +26,7 @@ class Settings:
     runtime_dir: Path
     host: str = "0.0.0.0"
     port: int = 8000
+    max_upload_mb: int = 500
 
     @property
     def state_file(self) -> Path:
@@ -43,6 +44,7 @@ class Settings:
             runtime_dir=runtime_dir,
             host=os.environ.get("HMP_HOST", "0.0.0.0"),
             port=int(os.environ.get("HMP_PORT", "8000")),
+            max_upload_mb=int(os.environ.get("HMP_MAX_UPLOAD_MB", "500")),
         )
 
     def ensure_directories(self) -> None:

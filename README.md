@@ -18,6 +18,7 @@ The audio comes out of the Pi itself (3.5 mm jack, USB DAC or HDMI). Your phone 
 
 - One global play queue: play, pause, seek, next and previous, play next, shuffle, repeat (off, all, one)
 - Library from a folder of `.mp3`, `.flac`, `.ogg` and `.wav` files (subfolders too), with tags, cover art and search
+- Upload songs from your phone or laptop: drag and drop, with progress for each file
 - Picks up where it left off after a restart or power cut: queue, track, position and volume
 - Copes with a sound card that shows up late at boot: it waits for it and then starts playing
 - A fast, server-rendered web UI that works on phones and desktops, in light and dark
@@ -35,7 +36,7 @@ mkdir -p music && cp /path/to/your/songs/* music/
 docker compose up -d
 ```
 
-Open `http://<raspberry-pi-ip>:8000`. Music lives in `music/`; the saved state (`state.json`) and the cover art cache in `data/`. After adding songs, press **Rescan**.
+Open `http://<raspberry-pi-ip>:8000`. Add songs with the **Upload** button, or copy them into `music/` and press **Rescan**. The saved state (`state.json`) and the cover art cache live in `data/`.
 
 The container needs the sound device: `docker-compose.yml` passes `/dev/snd` and the `audio` group. If you hear nothing, check the Pi's output and level with `alsamixer` on the host.
 

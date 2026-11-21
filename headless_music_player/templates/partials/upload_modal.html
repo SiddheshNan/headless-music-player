@@ -1,0 +1,73 @@
+{% from "macros/icons.html" import icon %}
+<dialog id="upload-modal" class="modal modal-bottom sm:modal-middle" aria-labelledby="upload-title"
+        data-max-bytes="{{ max_upload_bytes }}" data-extensions="{{ extensions|join(',') }}">
+  <div class="modal-box flex max-h-[88dvh] w-full flex-col gap-0 p-0 sm:max-w-lg">
+    <div class="flex items-start justify-between gap-4 px-5 pt-5 pb-4 sm:px-6">
+      <div>
+        <h2 id="upload-title" class="text-base font-semibold tracking-tight">Upload music</h2>
+        <p class="mt-0.5 text-sm text-base-content/60">Songs go into the music folder and appear in the library right away.</p>
+      </div>
+      <form method="dialog">
+        <button class="btn btn-ghost btn-square btn-sm -mt-1 -mr-2 text-base-content/60" aria-label="Close">{{ icon("x", "size-4") }}</button>
+      </form>
+    </div>
+
+    <div class="min-h-0 flex-1 overflow-y-auto px-5 sm:px-6">
+      <label id="upload-dropzone" for="upload-input"
+             class="group flex cursor-pointer flex-col items-center gap-3 rounded-box border-2 border-dashed border-base-300 px-6 py-9 text-center transition-colors hover:border-primary/60 hover:bg-primary/5 data-[compact]:flex-row data-[compact]:gap-3 data-[compact]:py-3.5 data-[compact]:text-left data-[dragging]:border-primary data-[dragging]:bg-primary/10">
+        <span class="grid size-12 shrink-0 place-items-center rounded-full bg-primary/10 text-primary transition-transform group-data-[compact]:size-9 group-data-[dragging]:scale-110">
+          {{ icon("upload", "size-5") }}
+        </span>
+        <span class="min-w-0">
+          <span class="block text-sm font-medium">
+            <span class="group-data-[dragging]:hidden">Drop songs here or <span class="text-primary underline-offset-2 group-hover:underline">browse</span></span>
+            <span class="hidden group-data-[dragging]:inline">Release to add</span>
+          </span>
+          <span class="mt-0.5 block text-xs text-base-content/50">
+            {{ extensions|map("replace", ".", "")|map("upper")|join(", ") }} · up to {{ (max_upload_bytes / 1048576)|round|int }} MB each
+          </span>
+        </span>
+        <input id="upload-input" type="file" multiple class="sr-only"
+               accept="{{ extensions|join(',') }},audio/*">
+      </label>
+
+      <ul id="upload-list" class="mt-3 space-y-2 pb-1" aria-live="polite"></ul>
+    </div>
+
+    <div class="mt-4 flex items-center justify-between gap-3 border-t border-base-300 bg-base-200/40 px-5 py-3.5 sm:px-6">
+      <p id="upload-summary" class="min-w-0 truncate text-xs text-base-content/60">No songs added yet</p>
+      <div class="flex shrink-0 gap-2">
+        <button type="button" id="upload-queue" class="btn btn-ghost btn-sm hidden">{{ icon("list-plus", "size-4") }} Add to queue</button>
+        <button type="button" id="upload-submit" class="btn btn-primary btn-sm min-w-28" disabled>
+          <span id="upload-spinner" class="loading loading-spinner loading-xs hidden"></span>
+          <span id="upload-submit-label">Upload</span>
+        </button>
+      </div>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button tabindex="-1">close</button></form>
+</dialog>
+
+{# One row per file, filled in by app.js. #}
+<template id="upload-row">
+  <li class="upload-row flex items-center gap-3 rounded-field border border-base-300 bg-base-100 p-2.5 pr-2" data-status="ready">
+    <span class="upload-icon grid size-9 shrink-0 place-items-center rounded-field bg-base-200 text-base-content/40">
+      <span data-show="ready uploading">{{ icon("music", "size-4") }}</span>
+      <span data-show="done duplicate" class="text-success">{{ icon("check", "size-4") }}</span>
+      <span data-show="error" class="text-error">{{ icon("alert", "size-4") }}</span>
+    </span>
+    <span class="min-w-0 flex-1">
+      <span class="upload-name block truncate text-sm font-medium"></span>
+      <span class="flex min-w-0 items-center gap-1.5 text-xs text-base-content/55">
+        <span class="upload-size shrink-0 whitespace-nowrap tabular-nums"></span>
+        <span aria-hidden="true">·</span>
+        <span class="upload-status min-w-0 truncate"></span>
+      </span>
+      <progress class="upload-progress progress progress-primary mt-1.5 hidden h-1 w-full" max="100" value="0"></progress>
+    </span>
+    <span data-show="uploading" class="loading loading-spinner loading-sm mx-1.5 text-primary" aria-label="Uploading"></span>
+    <button type="button" data-show="ready done duplicate error" class="upload-remove btn btn-ghost btn-square btn-sm text-base-content/50 hover:text-error" aria-label="Remove from the list" title="Remove">
+      {{ icon("x", "size-4") }}
+    </button>
+  </li>
+</template>

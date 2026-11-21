@@ -21,6 +21,9 @@ class PygameBackend:
 
     def open(self) -> None:
         os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
+        # Otherwise SDL takes over SIGTERM (when nothing else handles it) and ignores it,
+        # so `kill` or `docker stop` without gunicorn couldn't stop the player.
+        os.environ.setdefault("SDL_NO_SIGNAL_HANDLERS", "1")
         try:
             import pygame
             from pygame import mixer

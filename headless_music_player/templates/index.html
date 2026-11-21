@@ -17,6 +17,10 @@
       <span id="connection" class="hidden items-center gap-1.5 text-xs text-warning" role="status">
         <span class="status status-warning"></span> Reconnecting
       </span>
+      <button type="button" id="upload-open" class="btn btn-ghost btn-sm" title="Upload songs">
+        <span id="upload-badge" class="loading loading-spinner loading-xs hidden text-primary"></span>
+        <span id="upload-icon">{{ icon("upload", "size-4") }}</span><span class="hidden sm:inline">Upload</span>
+      </button>
       <button type="button" class="btn btn-ghost btn-sm" data-action="rescan" title="Rescan the music folder">
         {{ icon("refresh", "size-4") }}<span class="hidden sm:inline">Rescan</span>
       </button>
@@ -120,9 +124,12 @@
     </div>
   </section>
 </main>
+
+{% include "partials/upload_modal.html" %}
 {% endblock %}
 
 {% block scripts %}
 <script>window.INITIAL_STATE = {{ state|tojson }};</script>
 <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/upload.js') }}" defer></script>
 {% endblock %}
